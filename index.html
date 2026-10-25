@@ -238,6 +238,17 @@ button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
 .isles-list{list-style:none;margin:0;padding:0;display:grid;gap:10px}
 .isle-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;padding:12px;border:1px solid var(--line);border-left:3px solid var(--isle);border-radius:6px}
 .isle-text{display:grid;gap:4px;min-width:0}
+.pv{flex-shrink:0;width:48px;height:60px;border-radius:5px;background:rgba(255,255,255,.08)}
+.pv.pet{width:60px;height:48px}
+#fightList .foe-row{grid-template-columns:auto 1fr;align-items:start}
+#fightList .foe-row > .sail{grid-column:1/-1}
+.beaten-wrap{list-style:none}
+.beaten-wrap summary{cursor:pointer;padding:10px 12px;border:1px dashed var(--line);border-radius:6px;font-size:13px;color:var(--muted)}
+.beaten-wrap summary:hover{color:var(--text)}
+.beaten-wrap .isles-list{margin-top:10px}
+.pet-line > span{white-space:normal}
+.pet-filter{display:flex;flex-wrap:wrap;gap:6px}
+.pet-filter .mini-btn[aria-pressed="true"]{color:var(--brass);border-color:var(--brass)}
 #islesList .sail{font-size:14px;padding:9px 12px;min-width:120px}
 @media (max-width:480px){.isle-row{grid-template-columns:1fr}}
 #fightList .isle-row{grid-template-columns:1fr}
@@ -301,7 +312,7 @@ button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
       <div class="meter" aria-hidden="true"><i id="rivalBar"></i></div>
       <div class="counts"><span>Record <b id="record">0-0</b></span><span class="coin">Coins <b id="coins2">0</b></span></div>
       <div class="counts"><span>Win streak <b id="streak">0</b></span></div>
-      <div class="counts"><span>Pet <b id="rivalPet">None</b></span></div>
+      <div class="counts pet-line"><span>Pet <b id="rivalPet">None</b></span></div>
     </div>
   </div>
 
@@ -350,6 +361,7 @@ button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
     <div class="bag-head"><h2>Pets and outfits</h2><button class="icon-btn" id="styleClose" type="button">Close</button></div>
     <p class="isles-coins" id="styleCoins"></p>
     <span class="eyebrow sect">Pets follow you, fetch coin piles near you, and bite rivals in battle</span>
+    <div class="pet-filter" id="petFilter" role="group" aria-label="Show pets"><button class="mini-btn" type="button" data-pf="all" aria-pressed="true">All</button><button class="mini-btn" type="button" data-pf="own" aria-pressed="false">Owned</button><button class="mini-btn" type="button" data-pf="buy" aria-pressed="false">Can buy now</button></div>
     <ul class="isles-list" id="petList"></ul>
     <span class="eyebrow sect">Outfits: unlock more by playing</span>
     <ul class="outfit-grid" id="outfitList"></ul>
@@ -1294,7 +1306,7 @@ const GOALS = [
   { id: "boss1", text: "Defeat the Stone Giant", reward: 250, need: 1, val: () => SAVE.stats.bosses },
   { id: "boss3", text: "Defeat the Stone Giant 3 times", reward: 500, need: 3, val: () => SAVE.stats.bosses },
   { id: "pets3", text: "Adopt 3 pets", reward: 300, need: 3, val: () => SAVE.pets.length },
-  { id: "pets10", text: "Adopt 10 pets", reward: 1000, need: 10, val: () => SAVE.pets.length },
+  { id: "adopt10", text: "Adopt 10 pets", reward: 1000, need: 10, val: () => SAVE.pets.length },
   { id: "petsAll", text: "Adopt every pet", reward: 5000, need: 23, val: () => SAVE.pets.length },
   { id: "rivals10", text: "Beat 10 named rivals", reward: 800, need: 10, val: () => RIVALS.filter(f => SAVE.foes[f.id]).length },
   { id: "rivalsAll", text: "Beat all 30 named rivals", reward: 5000, need: 30, val: () => RIVALS.filter(f => SAVE.foes[f.id]).length },
@@ -1462,7 +1474,8 @@ function showLoading(text) { $("#loadTxt").textContent = text; $("#loading").hid
 // =====================================================================
 // ---------- 2D view: a top-down map with standing sprites ----------
 // =====================================================================
-const glc = $("#gl"), g2 = glc.getContext("2d");
+const glc = $("#gl");
+let g2 = glc.getContext("2d");
 let camYaw = -Math.PI / 2;   // the controls are screen-relative: W or the up arrow always walks up the screen
 const cam = { x: 0, y: 0, z: 1.6, sx: 0, sy: 0, base: 1.6 };
 const TAU = Math.PI * 2;
@@ -1814,13 +1827,18 @@ function drawWeapon(g, wp, pull) {
   }
   g.shadowBlur = 0;
 }
+function drawWingsH(g, col) {
+  g.fillStyle = col;
+  for (const s2 of [-1, 1]) { g.beginPath(); g.moveTo(s2 * 2, -22); g.quadraticCurveTo(s2 * 10, -34, s2 * 17, -30); g.lineTo(s2 * 15, -24); g.lineTo(s2 * 16.5, -19); g.lineTo(s2 * 12, -17); g.lineTo(s2 * 12.5, -12.5); g.quadraticCurveTo(s2 * 6, -14, s2 * 2, -17); g.closePath(); g.fill(); }
+  g.fillStyle = "rgba(255,255,255,.14)"; for (const s2 of [-1, 1]) { poly(g, [s2 * 3, -21.5, s2 * 15, -29, s2 * 9, -22]); g.fill(); }
+}
 function drawHuman(a, Lk, t, dt) {
   const z = cam.z * (Lk.sc || 1), sx = toSX(a.x), sy = toSY(a.y), g = g2;
   const moving = a.moving && !reduceMotion;
   if (moving) Lk.phase += (dt || 0.016) * 9 * clamp(a.mult || 1, 0.3, 1.6);
   const ph = Lk.phase, sw = moving ? Math.sin(ph) : 0;
   const cf = Math.cos(a.face), sf = Math.sin(a.face), dir = cf >= 0 ? 1 : -1, back = sf < -0.6, front = sf > 0.6;
-  const tt = a.hurtT > 0 ? [0xff2a10, 0.55] : a.wind > 0 || a.chargeWind > 0 ? [0xffd040, 0.5] : a.rollT > 0 ? [0x6ab8ff, 0.35] : a.onLava ? [0xff6a10, 0.35] : null;
+  const tt = a.hurtT > 0 ? [0xff2a10, 0.55] : a.wind > 0 || a.chargeWind > 0 ? [0xffd040, 0.5] : a.rollT > 0 ? [0x6ab8ff, 0.35] : a.onLava ? [0xff6a10, 0.35] : a.poisonT > 0 ? [0x6ad040, 0.38] : a.enraged ? [0xff3020, 0.24] : null;
   const C = n => css(tt ? tint(n, tt[0], tt[1]) : n);
   const wp = a === P ? (scene === "battle" && P.wpn ? P.wpn : weaponProfile(equipped())) : a.wpn, ext = {};
   for (const e of Lk.extras) { const [k, hx] = e.split(":"); ext[k] = hx ? parseInt(hx, 16) : 1; }
@@ -1848,6 +1866,7 @@ function drawHuman(a, Lk, t, dt) {
     g.fillStyle = C(Lk.skin); circ(g, hx, hy, wp && wp.kind === "fist" ? 1.9 : 1.5); g.fill();
   };
   // cape and pack hang behind
+  if (ext.wings && !back) drawWingsH(g, C(ext.wings));
   if (ext.cape && !back) { g.fillStyle = C(ext.cape); poly(g, [-5 - dir, -23, 5 - dir, -23, 7.5 - dir * 2.5, -5, -7.5 - dir * 2.5, -5]); g.fill(); }
   if (Lk.pack && !back) { g.fillStyle = "#6b5236"; rrect(g, -dir * 5.8 - 3, -23, 6, 10, 1.6); g.fill(); g.fillStyle = "#8a6b4a"; rrect(g, -dir * 5.8 - 3.4, -25.5, 6.8, 3, 1.4); g.fill(); }
   if (wBehind) drawArmAndWeapon();
@@ -1872,6 +1891,7 @@ function drawHuman(a, Lk, t, dt) {
   if (ext.pauldrons) { g.fillStyle = "#26262e"; for (const s2 of [-1, 1]) { g.beginPath(); g.arc(s2 * 5.2, -22.6, 3.1, Math.PI, TAU); g.fill(); } }
   if (Lk.pack && back) { g.fillStyle = "#6b5236"; rrect(g, -4.2, -24, 8.4, 11, 1.8); g.fill(); g.fillStyle = "#8a6b4a"; rrect(g, -4.6, -26.5, 9.2, 3, 1.4); g.fill(); g.fillStyle = "#4f3c28"; g.fillRect(-3.2, -19, 6.4, 1.2); }
   if (ext.cape && back) { g.fillStyle = C(ext.cape); poly(g, [-5.4, -24, 5.4, -24, 7.4, -5, -7.4, -5]); g.fill(); }
+  if (ext.wings && back) drawWingsH(g, C(ext.wings));
   if (ext.shield) { g.fillStyle = "#2a2a32"; ell(g, back ? 0 : dir * 3, -17, back ? 5 : 3.8, 5.6); g.fill(); g.strokeStyle = "#8a8a96"; g.lineWidth = 0.8; g.stroke(); g.fillStyle = "#c9a14a"; circ(g, back ? 0 : dir * 3, -17, 1.1); g.fill(); }
   // head
   const hX = dir * 0.5, hY = -31, eyeC = ext.eyes ? css(ext.eyes) : "#1a1410";
@@ -1904,54 +1924,237 @@ function drawHuman(a, Lk, t, dt) {
   if (ext.snout && !back) { g.fillStyle = C(Lk.skin); rrect(g, front ? hX - 2.4 : hX + dir * 3.6 - 1.8, hY + 1, front ? 4.8 : 4.4, 3.6, 1.2); g.fill(); g.strokeStyle = "#c9a14a"; g.lineWidth = 0.6; circ(g, front ? hX : hX + dir * 6.2, hY + 4.6, 0.8); g.stroke(); }
   if (ext.tusks && !back) { g.fillStyle = "#f0ead8"; for (const s2 of [-1, 1]) { const bx = front ? hX + s2 * 1.6 : hX + dir * 2.8 + s2 * 1.2; poly(g, [bx - 0.5, hY + 3.6, bx + 0.5, hY + 3.6, bx, hY + 1.6]); g.fill(); } }
   if (ext.crown) { g.fillStyle = "#d8b040"; g.fillRect(hX - 5, hY - 7.2, 10, 2.2); for (let k = 0; k < 5; k++) { const bx = hX - 5 + k * 2.5; poly(g, [bx - 1, hY - 7, bx + 1, hY - 7, bx, hY - 10]); g.fill(); } }
+  if (ext.beard && !back) { const bx = front ? hX : hX + dir * 2.4; g.fillStyle = C(ext.beard); g.beginPath(); g.moveTo(bx - 3.6, hY + 1.4); g.quadraticCurveTo(bx - 3, hY + 8.5, bx, hY + 9.5); g.quadraticCurveTo(bx + 3, hY + 8.5, bx + 3.6, hY + 1.4); g.quadraticCurveTo(bx, hY + 4.6, bx - 3.6, hY + 1.4); g.fill(); }
+  if (ext.antlers) { g.strokeStyle = C(ext.antlers); g.lineCap = "round"; g.lineWidth = 1.3; for (const s2 of [-1, 1]) { g.beginPath(); g.moveTo(hX + s2 * 3, hY - 5); g.lineTo(hX + s2 * 7, hY - 13); g.moveTo(hX + s2 * 5, hY - 9); g.lineTo(hX + s2 * 9.5, hY - 10); g.moveTo(hX + s2 * 6.2, hY - 11.4); g.lineTo(hX + s2 * 5, hY - 15.5); g.stroke(); } }
+  if (ext.halo) { g.strokeStyle = "#ffe38a"; g.lineWidth = 1.3; g.shadowColor = "#ffe38a"; g.shadowBlur = 8; ell(g, hX, hY - (ext.crown || ext.hat ? 14 : 10.5), 5.4, 1.6); g.stroke(); g.shadowBlur = 0; }
   if (!wBehind) drawArmAndWeapon();
   g.restore();
 }
 
 // ---------- animals: pets and the rivals' pets, seen from the side ----------
 const petAnim = { phase: 0 }, epAnim = { phase: 0 };
+const glowCache = {};
+const glowOf = c => glowCache[c] || (glowCache[c] = glowSprite(rgbOf(c).join(",")));
+const QUAD = { wolf: 1, fox: 1, drake: 1 };
+function wingFar(g, c, flap, dy) { g.fillStyle = shade(c, 0.75); poly(g, [2, -11 + dy, -5, -11.5 + dy, -2.5 + flap * 2, -21 - flap * 6 + dy]); g.fill(); }
+function wingNear(g, c, flap, dy) { g.fillStyle = shade(c, 1); poly(g, [2.5, -11 + dy, -5, -11 + dy, -1 - flap * 2, -22 + flap * 8 + dy]); g.fill(); }
+function eyeDot(g, def, x, y, r) {
+  if (def.eyes) { g.shadowColor = css(def.eyes); g.shadowBlur = 5; g.fillStyle = css(def.eyes); } else g.fillStyle = "#16110d";
+  circ(g, x, y, r); g.fill(); g.shadowBlur = 0;
+}
 function drawAnimal(p, def, A, t, dt) {
   const shape = def.shape || def.key, wings = !!def.wings || shape === "drake", g = g2, s = cam.z * (def.size || 1);
-  if (p.moving && !reduceMotion) A.phase += (dt || 0.016) * 15;
+  if (p.moving && !reduceMotion) A.phase += (dt || 0.016) * (shape === "turtle" ? 7 : shape === "slime" || shape === "frog" ? 9 : 15);
   const sw = p.moving ? Math.sin(A.phase) : 0, dir = Math.cos(p.face) >= 0 ? 1 : -1;
   const lift = wings ? 10 + (reduceMotion ? 0 : Math.sin(t * 0.004) * 2.5) : 0;
-  const tailT = def.tail || (shape === "fox" ? "bushy" : "normal"), col = def.color, bel = def.belly;
   g.save(); g.translate(toSX(p.x), toSY(p.y));
-  g.fillStyle = `rgba(0,0,0,${wings ? 0.16 : 0.26})`; ell(g, 0, 0, 7.5 * s, 2.6 * s); g.fill();
-  g.scale(s * dir, s); g.translate(0, -lift - (p.moving ? Math.abs(Math.cos(A.phase)) * 0.8 : 0));
+  g.fillStyle = `rgba(0,0,0,${wings ? 0.16 : 0.26})`; ell(g, 0, 0, (shape === "snake" ? 9.5 : 7.5) * s, 2.6 * s); g.fill();
+  if (def.glow) { g.globalCompositeOperation = "lighter"; g.globalAlpha = 0.45; const r = 15 * s; g.drawImage(glowOf(def.glow), -r, -r - (lift + 7) * s, r * 2, r * 2); g.globalCompositeOperation = "source-over"; g.globalAlpha = 1; }
+  if (def.ghost) g.globalAlpha = 0.62;
+  g.scale(s * dir, s);
+  const hopping = shape === "frog" || shape === "slime";
+  const hop = hopping ? (p.moving ? Math.abs(Math.sin(A.phase)) * 3 : 0) : p.moving && shape !== "snake" && shape !== "turtle" ? Math.abs(Math.cos(A.phase)) * 0.8 : 0;
+  g.translate(0, -lift - hop);
   const flap = reduceMotion ? 0.3 : Math.sin(t * 0.02) * 0.55;
-  // far wing and far legs
-  if (wings) { g.fillStyle = shade(bel, 0.75); poly(g, [2, -11, -5, -11.5, -2.5 + flap * 2, -21 - flap * 6]); g.fill(); }
+  (QUAD[shape] ? quadAnimal : ANIMAL[shape] || quadAnimal)(g, def, p, A, t, sw, flap, wings, shape);
+  g.restore();
+}
+function quadAnimal(g, def, p, A, t, sw, flap, wings, shape) {
+  const tailT = def.tail || (shape === "fox" ? "bushy" : "normal"), col = def.color, bel = def.belly;
+  if (wings) wingFar(g, bel, flap, 0);
   g.strokeStyle = shade(col, 0.7); g.lineWidth = 1.5; g.lineCap = "round";
   for (const [x, ph2] of [[3.6, -1], [-3.6, 1]]) { g.beginPath(); g.moveTo(x + 0.8, -6); g.lineTo(x + 0.8 + ph2 * sw * 2, 0); g.stroke(); }
   // tail
   g.save(); g.translate(-6.4, -9); g.rotate(reduceMotion ? 0 : Math.sin(t * 0.012) * 0.35);
-  if (tailT === "bushy") { g.fillStyle = css(col); ell(g, -3.4, -1.6, 4.2, 2.1, -0.5); g.fill(); g.fillStyle = css(bel); ell(g, -6.6, -3.4, 1.5, 1.1, -0.5); g.fill(); }
+  if (def.stinger) { g.strokeStyle = css(col); g.lineWidth = 1.6; g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(-6, -2, -4, -9); g.stroke(); g.fillStyle = "#2a1a10"; poly(g, [-4.9, -8.4, -2.8, -9.6, -3.4, -12.2]); g.fill(); }
+  else if (tailT === "bushy") { g.fillStyle = css(col); ell(g, -3.4, -1.6, 4.2, 2.1, -0.5); g.fill(); g.fillStyle = css(bel); ell(g, -6.6, -3.4, 1.5, 1.1, -0.5); g.fill(); }
   else if (tailT === "thin") { g.strokeStyle = css(col); g.lineWidth = 0.9; g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(-4, 0, -5.5, -5.5); g.stroke(); }
   else if (tailT === "short") { g.fillStyle = css(bel); circ(g, -0.6, -0.5, 1.6); g.fill(); }
   else { g.fillStyle = css(col); poly(g, [0, -1, 0, 1, -6.5, -3.4]); g.fill(); if (shape === "drake") { poly(g, [-6.5, -3.4, -8.6, -5.2, -8.4, -2.2]); g.fill(); } }
   g.restore();
-  // body
+  // body, with stripes or spots when it has them
   g.fillStyle = css(col); ell(g, 0, -8.2, 7, 4.1); g.fill();
+  if (def.stripes || def.spots) {
+    g.save(); ell(g, 0, -8.2, 7, 4.1); g.clip();
+    if (def.stripes) { g.strokeStyle = css(def.stripes); g.lineWidth = 1.1; for (let k = -2; k <= 2; k++) { g.beginPath(); g.moveTo(k * 2.6 - 1, -12.5); g.lineTo(k * 2.6 + 0.6, -6.5); g.stroke(); } }
+    if (def.spots) { g.fillStyle = css(def.spots); for (const [x, y, r] of [[-4, -9.5, 0.9], [-1.5, -10.8, 0.8], [1.5, -9, 1], [4, -10.2, 0.8], [-2.8, -7.4, 0.7], [3.2, -7.6, 0.7]]) { circ(g, x, y, r); g.fill(); } }
+    g.restore();
+  }
   g.fillStyle = css(bel); ell(g, 0.8, -6.6, 5.4, 2.3); g.fill();
   g.fillStyle = "rgba(255,255,255,.14)"; ell(g, -1, -10.4, 4.6, 1.4); g.fill();
+  if (def.spikes) { g.fillStyle = shade(col, 0.6); for (let k = -3; k <= 2; k++) { const x = k * 1.7; poly(g, [x - 0.9, -11.6, x + 0.9, -11.8, x - 0.4, -14.4]); g.fill(); } }
   // near legs
   g.strokeStyle = css(col); g.lineWidth = 1.7;
   for (const [x, ph2] of [[3.6, 1], [-3.6, -1]]) { g.beginPath(); g.moveTo(x, -6); g.lineTo(x + ph2 * sw * 2, 0); g.stroke(); }
   // head
   const bite = p.bite > 0 ? 1.8 : 0, hx = 7.2 + bite, hy = -12 + bite * 0.3;
+  if (def.mane) { g.fillStyle = css(def.mane); for (const [x, y, r] of [[-1.6, 1.2, 2.7], [-2.4, -1.4, 2.5], [-0.6, -2.8, 2.3], [-1.2, 3.2, 2.3], [0.4, 2.4, 2]]) { circ(g, hx + x, hy + y, r); g.fill(); } }
   g.fillStyle = css(col); circ(g, hx, hy, 3.3); g.fill();
   g.fillStyle = css(bel); ell(g, hx + 2.6, hy + 0.9, 2.3, 1.5); g.fill();
-  g.fillStyle = "#16110d"; circ(g, hx + 4.8, hy + 0.5, 0.6); g.fill(); circ(g, hx + 1.4, hy - 0.8, 0.55); g.fill();
+  g.fillStyle = "#16110d"; circ(g, hx + 4.8, hy + 0.5, 0.6); g.fill();
+  eyeDot(g, def, hx + 1.4, hy - 0.8, 0.55);
   if (def.ears === "long") { g.fillStyle = css(col); ell(g, hx - 1.2, hy - 5, 0.9, 3.4, -0.15); g.fill(); g.fillStyle = css(bel); ell(g, hx - 1.2, hy - 5, 0.45, 2.4, -0.15); g.fill(); }
   else if (def.ears === "round") { g.fillStyle = css(col); circ(g, hx - 1, hy - 3, 1.4); g.fill(); }
   else { g.fillStyle = css(wings ? bel : col); poly(g, [hx - 2.2, hy - 2, hx - 0.2, hy - 2.6, hx - 1.8, hy - 5.8]); g.fill(); }
   if (def.horns) { g.strokeStyle = "#f0e8d0"; g.lineWidth = 0.7; g.beginPath(); g.moveTo(hx - 1, hy - 2.6); g.lineTo(hx - 3.6, hy - 7.5); g.moveTo(hx - 2.6, hy - 5.4); g.lineTo(hx - 5, hy - 6.4); g.stroke(); }
+  if (def.horn) {   // a single unicorn horn
+    g.fillStyle = css(def.horn); poly(g, [hx + 0.2, hy - 2.6, hx + 1.9, hy - 2.2, hx + 3.8, hy - 9.4]); g.fill();
+    g.strokeStyle = shade(def.horn, 0.65); g.lineWidth = 0.3; g.beginPath();
+    for (const k of [0.3, 0.55, 0.78]) { const x = lerp(hx + 1, hx + 3.8, k), y = lerp(hy - 2.4, hy - 9.4, k); g.moveTo(x - 0.8 * (1 - k), y + 0.2); g.lineTo(x + 0.8 * (1 - k), y - 0.4); }
+    g.stroke();
+  }
+  if (def.fangs) { g.fillStyle = "#ffffff"; poly(g, [hx + 3.2, hy + 1.8, hx + 3.9, hy + 1.8, hx + 3.5, hy + 4.2]); g.fill(); poly(g, [hx + 4.4, hy + 1.7, hx + 5.1, hy + 1.7, hx + 4.7, hy + 3.8]); g.fill(); }
   if (p.bite > 0) { g.fillStyle = "#7a1a10"; poly(g, [hx + 3, hy + 1.6, hx + 5.4, hy + 1.2, hx + 5, hy + 2.6]); g.fill(); }
-  // near wing
-  if (wings) { g.fillStyle = shade(bel, 1); g.globalAlpha *= 0.95; poly(g, [2.5, -11, -5, -11, -1 - flap * 2, -22 + flap * 8]); g.fill(); g.globalAlpha = 1; }
-  g.restore();
+  if (wings) { g.globalAlpha *= 0.95; wingNear(g, bel, flap, 0); g.globalAlpha /= 0.95; }
 }
+const ANIMAL = {
+  bird(g, def, p, A, t, sw, flap, wings) {
+    const col = def.color, bel = def.belly;
+    if (wings) wingFar(g, col, flap, 2);
+    g.strokeStyle = css(def.legs || 0xd89a3a); g.lineWidth = 0.8; g.lineCap = "round";
+    if (!wings) for (const [x, ph2] of [[-0.8, 1], [1.2, -1]]) { g.beginPath(); g.moveTo(x, -4); g.lineTo(x + ph2 * sw * 1.4, 0); g.stroke(); }
+    g.fillStyle = shade(col, 0.78); poly(g, [-3.6, -7.2, -9.4, -9.6, -8.6, -5.4]); g.fill();   // tail feathers
+    g.fillStyle = css(col); ell(g, 0, -7.6, 5, 4.3); g.fill();
+    g.fillStyle = css(bel); ell(g, 1.5, -6.3, 3.3, 2.9); g.fill();
+    if (!wings) { g.fillStyle = shade(col, 0.82); ell(g, -1.3, -8, 3.8, 2.3, 0.25); g.fill(); }
+    const hx = 3.9 + (p.bite > 0 ? 1 : 0), hy = -12.4, head = def.head || col;
+    if (def.crest) { g.fillStyle = css(def.crest); for (const [x, h] of [[-1.6, 3.6], [-0.4, 4.4], [0.8, 3.6]]) { poly(g, [hx + x - 0.6, hy - 2, hx + x + 0.6, hy - 2, hx + x - 0.8, hy - 2 - h]); g.fill(); } }
+    g.fillStyle = css(head); circ(g, hx, hy, def.owl ? 3.4 : 2.8); g.fill();
+    if (def.ears === "tufts") { g.fillStyle = css(head); poly(g, [hx - 2.6, hy - 1.6, hx - 1.2, hy - 2.6, hx - 2.8, hy - 5.4]); g.fill(); poly(g, [hx + 0.4, hy - 2.8, hx + 1.8, hy - 2.2, hx + 1.4, hy - 5.6]); g.fill(); }
+    g.fillStyle = css(def.beak || 0xf0a030);
+    if (def.owl) {
+      g.fillStyle = css(bel); ell(g, hx + 0.7, hy + 0.2, 2.6, 2.3); g.fill();
+      eyeDot(g, def, hx - 0.3, hy - 0.4, 0.75); eyeDot(g, def, hx + 1.9, hy - 0.4, 0.75);
+      g.fillStyle = css(def.beak || 0xd8a040); poly(g, [hx + 0.4, hy + 0.6, hx + 1.4, hy + 0.6, hx + 0.9, hy + 2.1]); g.fill();
+    } else {
+      eyeDot(g, def, hx + 0.9, hy - 0.6, 0.55);
+      g.fillStyle = css(def.beak || 0xf0a030);
+      if (p.bite > 0) { poly(g, [hx + 2.2, hy - 1, hx + 5.6, hy - 1.2, hx + 2.4, hy + 0.1]); g.fill(); poly(g, [hx + 2.2, hy + 0.4, hx + 5, hy + 1.6, hx + 2.2, hy + 1.2]); g.fill(); }
+      else { poly(g, [hx + 2.2, hy - 0.8, hx + 5.4, hy + 0.2, hx + 2.2, hy + 1.1]); g.fill(); }
+    }
+    if (wings) wingNear(g, col, flap, 2);
+  },
+  turtle(g, def, p, A, t, sw) {
+    const col = def.color, sh = def.belly;
+    g.fillStyle = css(col);
+    for (const [x, ph2] of [[4.4, 1], [-4.4, -1], [3.2, -1], [-3.2, 1]]) { ell(g, x + ph2 * sw * 0.9, -1.2, 1.5, 1.4); g.fill(); }
+    poly(g, [-6.6, -2.4, -6.6, -1.2, -9, -1.6]); g.fill();
+    const hx = 7.4 + (p.bite > 0 ? 1.2 : 0) + sw * 0.4, hy = -4.2;
+    ell(g, hx - 1.8, hy + 0.6, 1.6, 1.2); g.fill(); ell(g, hx, hy, 2.5, 1.9); g.fill();
+    eyeDot(g, def, hx + 0.8, hy - 0.5, 0.45);
+    if (p.bite > 0) { g.fillStyle = "#3a1010"; poly(g, [hx + 1.2, hy + 0.6, hx + 2.6, hy + 0.2, hx + 2.4, hy + 1.2]); g.fill(); }
+    g.fillStyle = shade(sh, 0.7); g.beginPath(); g.ellipse(0, -2.6, 7.4, 6.2, 0, Math.PI, TAU); g.closePath(); g.fill();
+    g.fillStyle = css(sh); g.beginPath(); g.ellipse(0, -3.1, 6.6, 5.6, 0, Math.PI, TAU); g.closePath(); g.fill();
+    g.fillStyle = shade(sh, 1.25); for (const [x, y, r] of [[-3.4, -4.6, 1.4], [0, -6.2, 1.6], [3.4, -4.6, 1.4], [-1.7, -3.6, 1], [1.7, -3.6, 1]]) { circ(g, x, y, r); g.fill(); }
+    g.fillStyle = shade(sh, 0.55); g.fillRect(-7.4, -3, 14.8, 1.2);
+    if (def.spikes) { g.fillStyle = shade(sh, 0.5); for (const [x, y] of [[-4.6, -5.4], [-1.6, -7.8], [1.6, -7.8], [4.6, -5.4]]) { poly(g, [x - 0.8, y + 0.6, x + 0.8, y + 0.6, x, y - 2]); g.fill(); } }
+    if (def.trees) for (const [x, y, r] of [[-3, -8, 1.6], [0.4, -9.6, 2], [3.4, -7.8, 1.5]]) { g.fillStyle = "#5a3a1e"; g.fillRect(x - 0.25, y, 0.5, 1.6); g.fillStyle = "#3f8a3a"; circ(g, x, y - 0.4, r); g.fill(); g.fillStyle = "#5aa84a"; circ(g, x - r * 0.3, y - r * 0.6, r * 0.5); g.fill(); }
+  },
+  slime(g, def, p, A, t) {
+    const col = def.color, j = reduceMotion ? 0 : p.moving ? Math.sin(A.phase * 2) * 0.14 : Math.sin(t * 0.004) * 0.05;
+    const w = 6.6 * (1 + j), h = 5.4 * (1 - j), a0 = g.globalAlpha;
+    g.globalAlpha = a0 * 0.92;
+    g.fillStyle = css(col); g.beginPath(); g.moveTo(-w, 0); g.bezierCurveTo(-w, -h * 1.9, w, -h * 1.9, w, 0); g.closePath(); g.fill();
+    g.globalAlpha = a0;
+    g.fillStyle = shade(col, 0.72); g.beginPath(); g.ellipse(0, -0.2, w, 1.1, 0, 0, Math.PI); g.fill();
+    if (def.core) { g.fillStyle = css(def.belly); poly(g, [-0.6, -h * 1.15, 1, -h * 0.75, -0.6, -h * 0.35, -2.2, -h * 0.75]); g.fill(); }
+    if (def.stars) { g.fillStyle = css(def.belly); for (const [x, y] of [[-3, -3], [-1, -6], [2.5, -4.6], [0.8, -2], [-4, -5.2]]) { circ(g, x, y * (1 - j), 0.45); g.fill(); } }
+    g.fillStyle = "rgba(255,255,255,.45)"; ell(g, -2.8, -h * 1.12, 1.6, 0.9, -0.5); g.fill();
+    g.fillStyle = "#16110d"; ell(g, 1.4, -h * 0.85, 0.7, 1.1); g.fill(); ell(g, 3.8, -h * 0.82, 0.65, 1.05); g.fill();
+    if (p.bite > 0) { g.fillStyle = "#3a1010"; ell(g, 2.8, -h * 0.42, 1.2, 0.9); g.fill(); }
+    if (def.crown) { g.fillStyle = "#e8c040"; const y = -h * 1.38; g.fillRect(-2.4, y, 4.8, 1.2); for (const x of [-2, 0, 2]) { poly(g, [x - 0.7, y, x + 0.7, y, x, y - 1.8]); g.fill(); } }
+  },
+  spider(g, def, p, A, t) {
+    const col = def.color, bel = def.belly, ph = p.moving ? A.phase : 0;
+    g.lineCap = "round"; g.lineWidth = 0.9;
+    for (const far of [true, false]) {
+      g.strokeStyle = shade(col, far ? 0.6 : 0.95);
+      for (let k = 0; k < 4; k++) {
+        const lift = p.moving ? Math.max(0, Math.sin(ph + k * 1.7 + (far ? Math.PI : 0))) * 1.6 : 0;
+        const rx = -1.6 + k * 1.1, fx2 = -7 + k * 4.6 + (far ? 1 : 0), kx = (rx + fx2) / 2, ky = far ? -9 : -10;
+        g.beginPath(); g.moveTo(rx, -5.6); g.quadraticCurveTo(kx, ky - lift, fx2, -lift * 0.6); g.stroke();
+      }
+      if (!far) break;
+      if (def.stinger) { g.strokeStyle = css(col); g.lineWidth = 1.5; g.beginPath(); g.moveTo(-6.5, -6.5); g.quadraticCurveTo(-10, -12, -5, -14); g.stroke(); g.fillStyle = "#2a1a10"; poly(g, [-5.6, -13.4, -3.2, -14.8, -4, -11.8]); g.fill(); g.lineWidth = 0.9; }
+      g.fillStyle = css(col); ell(g, -3.2, -6.4, 4.4, 3.6); g.fill();
+      g.fillStyle = css(bel); ell(g, -3.6, -7.2, 2, 1.4); g.fill();
+      g.fillStyle = shade(col, 1.15); ell(g, 2.2, -5.4, 2.6, 2.2); g.fill();
+      g.fillStyle = css(def.eyes || 0xff3030); for (const [x, y] of [[3.5, -6.3], [4.3, -5.6], [3.2, -5.1]]) { circ(g, x, y, 0.38); g.fill(); }
+      if (p.bite > 0) { g.fillStyle = "#e8e0d0"; poly(g, [4, -4.4, 4.6, -4.4, 4.5, -3]); g.fill(); }
+      if (def.crown) { g.fillStyle = "#e8c040"; g.fillRect(0.6, -8.4, 3.4, 0.9); for (const x of [0.9, 2.3, 3.7]) { poly(g, [x - 0.5, -8.4, x + 0.5, -8.4, x, -9.8]); g.fill(); } }
+    }
+  },
+  snake(g, def, p, A, t, sw, flap, wings) {
+    const col = def.color, bel = def.belly, ph = reduceMotion ? 0 : p.moving ? A.phase * 0.7 : t * 0.002;
+    if (wings) { g.save(); g.translate(0, -2); g.scale(0.7, 0.7); wingFar(g, def.crest || bel, flap, 0); g.restore(); }
+    const seg = [];
+    for (let k = 0; k < 11; k++) seg.push([-10 + k * 1.55, -1.6 + Math.sin(ph - k * 0.65) * 1.1 * (k < 10 ? 1 : 0.5), 0.7 + k * 0.13]);
+    for (const [x, y, r] of seg) { g.fillStyle = css(col); circ(g, x, y - r * 0.2, r + 0.6); g.fill(); }
+    seg.forEach(([x, y, r], k) => { g.fillStyle = css(bel); ell(g, x, y + r * 0.35, r * 0.75, r * 0.32); g.fill(); if (def.bands && k % 2) { g.fillStyle = css(def.bands); ell(g, x, y - r * 0.5, r * 0.55, r * 0.5); g.fill(); } });
+    const [lx, ly] = seg[10], hb = p.bite > 0 ? 1.5 : 0, hx = lx + 3 + hb, hy = ly - 3.4;
+    const head = (x, y) => {
+      g.strokeStyle = css(col); g.lineWidth = 2.6; g.lineCap = "round"; g.beginPath(); g.moveTo(lx, ly); g.quadraticCurveTo(lx + 1.4, ly - 1, x - 1.4, y + 0.5); g.stroke();
+      if (def.hood) { g.fillStyle = shade(col, 0.85); ell(g, x - 1.7, y + 0.9, 1.9, 3.6); g.fill(); g.fillStyle = css(bel); ell(g, x - 1.5, y + 1.1, 1, 2.4); g.fill(); }
+      if (def.crest) { g.fillStyle = css(def.crest); for (const dx of [-1.4, -0.2]) { poly(g, [x + dx - 0.6, y - 1.2, x + dx + 0.6, y - 1.4, x + dx - 1, y - 4]); g.fill(); } }
+      g.fillStyle = css(col); ell(g, x, y, 2.5, 1.7); g.fill();
+      eyeDot(g, def, x + 0.6, y - 0.5, 0.45);
+      if (p.bite > 0 || (!reduceMotion && Math.sin(t * 0.005 + x) > 0.93)) { g.strokeStyle = "#e0303a"; g.lineWidth = 0.35; g.beginPath(); g.moveTo(x + 2.3, y + 0.3); g.lineTo(x + 4.4, y + 0.3); g.lineTo(x + 5.1, y - 0.4); g.moveTo(x + 4.4, y + 0.3); g.lineTo(x + 5.1, y + 1); g.stroke(); }
+    };
+    if (def.twin) head(hx - 2.6, hy - 3.2);
+    head(hx, hy);
+    if (wings) { g.save(); g.translate(0, -2); g.scale(0.7, 0.7); wingNear(g, def.crest || bel, flap, 0); g.restore(); }
+  },
+  frog(g, def, p, A, t) {
+    const col = def.color, bel = def.belly;
+    g.fillStyle = shade(col, 0.8); ell(g, -3.6, -2, 3.2, 2.1, 0.2); g.fill();
+    g.fillStyle = shade(col, 0.7); ell(g, -1.8, -0.4, 2.6, 0.8); g.fill();
+    g.fillStyle = css(col); ell(g, 0, -4.4, 5.6, 3.9); g.fill();
+    if (def.spots) { g.save(); ell(g, 0, -4.4, 5.6, 3.9); g.clip(); g.fillStyle = css(def.spots); for (const [x, y, r] of [[-3, -5.6, 0.9], [-0.6, -7, 0.8], [1.8, -5.2, 0.7], [-1.8, -3.6, 0.6]]) { circ(g, x, y, r); g.fill(); } g.restore(); }
+    g.fillStyle = css(bel); ell(g, 1.4, -3.2, 3.6, 2.2); g.fill();
+    g.strokeStyle = css(col); g.lineWidth = 1.2; g.lineCap = "round"; g.beginPath(); g.moveTo(3, -3); g.lineTo(4.4, 0); g.stroke();
+    for (const x of [1.8, 4.2]) {
+      g.fillStyle = css(col); circ(g, x, -8, 1.7); g.fill();
+      g.fillStyle = css(def.eyes || 0xf0e0a0); circ(g, x + 0.3, -8.2, 1.1); g.fill();
+      g.fillStyle = "#111111"; ell(g, x + 0.5, -8.2, 0.4, 0.7); g.fill();
+    }
+    g.strokeStyle = shade(col, 0.5); g.lineWidth = 0.4; g.beginPath(); g.arc(3.6, -5.6, 2, 0.15, 1.1); g.stroke();
+    if (p.bite > 0) { g.strokeStyle = "#e05a7a"; g.lineWidth = 0.8; g.beginPath(); g.moveTo(5.2, -4.6); g.lineTo(10, -4.6); g.stroke(); g.fillStyle = "#e05a7a"; circ(g, 10, -4.6, 0.7); g.fill(); }
+  }
+};
+
+// ---------- small pictures of pets and fighters for the menus ----------
+const PV = {};
+function drawOffscreen(c, cx, cy, z, fn) {
+  const old = g2, oc = { x: cam.x, y: cam.y, z: cam.z, sx: cam.sx, sy: cam.sy };
+  g2 = c.getContext("2d"); g2.setTransform(2, 0, 0, 2, 0, 0);
+  cam.z = z; cam.sx = cam.sy = 0; cam.x = (vw / 2 - cx) / z; cam.y = (vh / 2 - cy) / z;
+  try { fn(); } catch (e) { } finally { g2 = old; Object.assign(cam, oc); }
+}
+function petPicture(k) {
+  if (PV["p" + k]) return PV["p" + k];
+  const def = PETS[k], c = canvasOf(120, 96), fly = !!def.wings || (def.shape || def.key) === "drake", sh = def.shape || def.key;
+  const sz = def.size || 1, z = (fly ? 1.75 : 2.0) / Math.pow(sz, 0.75);   // flyers drop to the ground line so they fill the box like walkers
+  drawOffscreen(c, sh === "snake" ? 31 : 28, fly ? 44 + 10 * z * sz : 45, z, () => drawAnimal({ x: 0, y: 0, face: 0, moving: false, bite: 0 }, def, { phase: 0 }, 0, 0));
+  return PV["p" + k] = c;
+}
+function foePicture(f, locked) {
+  const key = "f" + f.id + (locked ? "L" : "");
+  if (PV[key]) return PV[key];
+  const c = canvasOf(96, 120);
+  const look = { shirt: f.shirt, pants: f.pants, skin: f.skin, hair: f.hair, pack: false, extras: (f.look || []).slice(), sc: 1, alpha: 1, phase: 0 };
+  const a = { x: 0, y: 0, face: 1.2, moving: false, mult: 1, wpn: Object.assign({}, f.wpn, { tier: null }), hurtT: 0, swingT: 0 };
+  drawOffscreen(c, 24, 58, 1.12, () => drawHuman(a, look, 0, 0));
+  if (locked) { const g = c.getContext("2d"); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = "source-atop"; g.fillStyle = "#11160f"; g.fillRect(0, 0, c.width, c.height); }
+  return PV[key] = c;
+}
+function fillPicture(cv) {
+  if (cv.dataset.done) return;
+  cv.dataset.done = "1";
+  const src = cv.dataset.pet ? petPicture(cv.dataset.pet) : FOE_BY_ID[cv.dataset.foe] ? foePicture(FOE_BY_ID[cv.dataset.foe], cv.dataset.lock === "1") : null;
+  if (src) cv.getContext("2d").drawImage(src, 0, 0);
+}
+const pvIO = "IntersectionObserver" in window ? new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) { fillPicture(e.target); pvIO.unobserve(e.target); } }, { rootMargin: "160px" }) : null;
+function fillPortraits(root) { for (const cv of root.querySelectorAll("canvas.pv:not([data-done])")) pvIO ? pvIO.observe(cv) : fillPicture(cv); }
 
 // ---------- chests, coins, potions, cave mouths ----------
 function drawChest(c, t) {
@@ -2708,6 +2911,7 @@ function blinkFoe(R) {
 // special moves; returns true when the move takes over the bad guy's movement this frame
 function foeTick(R, dt, d, tx, ty) {
   const f = R.foe; R.abT -= dt;
+  if (f.ability === "enrage" && !R.enraged && R.hp > 0 && R.hp < R.maxHp * 0.5) { R.enraged = true; R.D.speed *= 1.35; R.D.cd *= 0.7; ring(R.x, R.y, 0xff3020, 90); sfx("roar"); notify(`${f.name} is enraged!`); }
   if (f.ability === "regen" && R.hurtT <= 0 && R.hp < R.maxHp) R.hp = Math.min(R.maxHp, R.hp + 6 * dt);
   if ((f.ability === "blink" || f.ability === "lich") && R.abT <= 0 && d < 800 && !(R.wind > 0)) { blinkFoe(R); R.abT = f.ability === "lich" ? 6 : 4; }
   if (f.ability === "lich" && !R.healed && R.hp < R.maxHp * 0.4) {
@@ -2874,6 +3078,427 @@ const RIVALS = RIVAL_DEFS.map(([id, name, title, skin, shirt, pants, hair, look,
   pet: "p_" + NEW_PETS[Math.floor(i * NEW_PETS.length / RIVAL_DEFS.length)][0], idx: i, kind: "Rival"
 }, ex || {}));
 RIVALS.forEach((f, i) => { f.list = RIVALS; f.volley = f.volley || f.ability === "volley"; f.wpn = RIVAL_DEFS[i][8](6 + Math.round(i * 0.55)); FOE_BY_ID[f.id] = f; });
+
+// =====================================================================
+// ---------- 100 more pets, 100 more rivals, 120 more bad guys ----------
+// =====================================================================
+const ABILITY_LINE = {
+  none: "", dash: "Darts in and out fast.", volley: "Fires three shots at once.", revive: "Gets back up once after you knock it down.",
+  regen: "Heals whenever you stop hitting it.", frost: "Every hit slows you down for a moment.", blink: "Teleports around you.",
+  fade: "Turns invisible and strikes from the shadows.", charge: "Paws the ground, then charges across the field.", shield: "Blocks most hits from the front.",
+  lich: "Teleports, and heals itself once when badly hurt.", poison: "Its hits poison you for a few seconds.", drain: "Heals itself with every hit it lands on you.",
+  quake: "Slams the ground and hits everything close by.", enrage: "Gets faster and angrier at half health."
+};
+Object.assign(RIVAL_TIPS, {
+  poison: "Grab a red potion: it cures poison as well as healing.", drain: "Every hit it lands heals it, so dodge more and trade less.",
+  quake: "Its slam reaches past its weapon. Roll well away when the ! appears.", enrage: "Save your super for when it gets angry at half health."
+});
+const describe = (flavor, ability, o) => [flavor, ABILITY_LINE[ability], o && o.double ? "Strikes twice." : "", o && o.volley && ability !== "volley" ? "Shoots three at a time." : ""].filter(Boolean).join(" ");
+function wpOf(spec, name, dmg) { const [k, hx] = spec.split(":"); return k === "staff" ? WP.staff(parseInt(hx, 16))(name)(dmg) : WP[k](name)(dmg); }
+FOE_BY_ID.lich.blurb = "Ruler of the undead. Teleports, fires three soul bolts at once, and heals himself once when hurt.";
+
+// ---------- pets: weakest first; price, bite and reach climb down the list ----------
+// [key, name, body, colour, belly (shell for turtles), size, extras, description]
+const MORE_PETS = [
+  ["hamster", "Hamster", "fox", 0xd8a060, 0xf8ecd8, 0.5, { ears: "round", tail: "short" }, "Stuffs its cheeks with coins."],
+  ["chick", "Baby Chick", "bird", 0xf8e060, 0xfff4a0, 0.45, {}, "Peeps at rivals until they leave."],
+  ["mouse", "Field Mouse", "fox", 0x9a8a78, 0xe8dccc, 0.45, { ears: "round", tail: "thin" }, "Tiny, quick and always hungry."],
+  ["pondfrog", "Pond Frog", "frog", 0x5aa040, 0xd8e890, 0.6, {}, "Ribbits at the worst possible moment."],
+  ["greenslime", "Green Slime", "slime", 0x6ad050, 0xb8f090, 0.6, {}, "Squishy, bouncy and oddly loyal."],
+  ["hedgehog", "Hedgehog", "fox", 0x7a5a40, 0xe8d8c0, 0.55, { ears: "round", tail: "short", spikes: true }, "Rolls into a spiky ball when rivals come close."],
+  ["duckling", "Duckling", "bird", 0xf0d040, 0xfff0a0, 0.5, { beak: 0xf08a20 }, "Waddles after you everywhere."],
+  ["squirrel", "Squirrel", "fox", 0xb8642a, 0xf0d8b8, 0.55, { ears: "round" }, "Buries coins and forgets where."],
+  ["puppy", "Puppy", "wolf", 0xd8b07a, 0xf4e8d4, 0.7, { ears: "round", tail: "short" }, "All paws and no plan."],
+  ["kitten", "Tabby Kitten", "wolf", 0x9a9aa0, 0xe8e8ec, 0.6, { tail: "thin", stripes: 0x6a6a72 }, "Pounces on anything that moves."],
+  ["pigeon", "City Pigeon", "bird", 0x8a90a0, 0xc8ccd8, 0.5, { wings: true, head: 0x6a7a8a }, "Flies above the fight, pecking on the way down."],
+  ["gardensnake", "Garden Snake", "snake", 0x5a9a3a, 0xd8e8a0, 0.7, { bands: 0x3a6a2a }, "Harmless to you, sneaky to rivals."],
+  ["boxturtle", "Box Turtle", "turtle", 0x6a7a3a, 0x8a6a3a, 0.7, {}, "Slow, steady and very hard to scare."],
+  ["piglet", "Piglet", "wolf", 0xf0a8a8, 0xf8c8c8, 0.65, { ears: "round", tail: "thin" }, "Snorts, squeals and bites ankles."],
+  ["lamb", "Lamb", "wolf", 0xf4f0e8, 0xffffff, 0.7, { ears: "round", tail: "short", mane: 0xffffff }, "Fluffy all over and braver than it looks."],
+  ["bluebird", "Bluebird", "bird", 0x3a7ad8, 0xf0a060, 0.45, { wings: true }, "Sings a battle song as it flies."],
+  ["gardenspider", "Garden Spider", "spider", 0x6a4a2a, 0xd8b060, 0.5, {}, "Spins a web of tiny traps."],
+  ["otter", "River Otter", "fox", 0x6a4a30, 0xc8a888, 0.7, { ears: "round", tail: "normal" }, "Slippery in water and on land."],
+  ["corgi", "Corgi", "wolf", 0xd8843a, 0xffffff, 0.7, { tail: "short" }, "Short legs, huge heart."],
+  ["bat", "Cave Bat", "bird", 0x3a2e2e, 0x5a4a4a, 0.5, { wings: true, ears: "tufts", beak: 0x2a2020, eyes: 0xffb040 }, "Hangs upside down until a fight starts."],
+  ["beagle", "Beagle", "wolf", 0xc8843a, 0xf4ecdc, 0.8, { ears: "long" }, "Sniffs out coin piles from far away."],
+  ["parrot", "Parrot", "bird", 0xe03a2a, 0x3a8ad8, 0.55, { wings: true, beak: 0x2a2a2a, crest: 0xf0d030 }, "Repeats every rival's battle cry back at them."],
+  ["ferret", "Ferret", "fox", 0xe8dcc0, 0x6a5a48, 0.55, { tail: "thin" }, "Steals things. Mostly coins."],
+  ["barnowl", "Barn Owl", "bird", 0xd8b080, 0xf8f0e0, 0.6, { wings: true, ears: "tufts", owl: true }, "Hunts at night and never misses."],
+  ["hornedtoad", "Horned Toad", "frog", 0x8a7a4a, 0xd8c890, 0.7, { spots: 0x5a4a2a }, "Lumpy, grumpy and tough."],
+  ["blueslime", "Blue Slime", "slime", 0x4a9ae8, 0xa8d8ff, 0.7, {}, "Wobbles happily into battle."],
+  ["dalmatian", "Dalmatian", "wolf", 0xf8f8f4, 0xffffff, 0.95, { spots: 0x1a1a1a, tail: "thin" }, "Spotted, speedy and loyal."],
+  ["pony", "Pony", "wolf", 0xa8743a, 0xd8a878, 1.15, { mane: 0x4a2a14, tail: "bushy" }, "Carries snacks and kicks hard."],
+  ["goat", "Mountain Goat", "wolf", 0xe8e4dc, 0xffffff, 0.95, { horns: true, tail: "short" }, "Climbs anything and headbutts everything."],
+  ["tortoise", "Desert Tortoise", "turtle", 0xa89060, 0xc8a060, 0.85, {}, "Older than your grandparents."],
+  ["rattlesnake", "Rattlesnake", "snake", 0xc8a060, 0xe8d8a8, 0.85, { bands: 0x7a5a30 }, "Rattles a warning, then strikes."],
+  ["lynx", "Lynx", "wolf", 0xc8a070, 0xf0e4d0, 0.95, { tail: "short", spots: 0x8a6a40 }, "Tufted ears and silent paws."],
+  ["honeybadger", "Honey Badger", "wolf", 0x2a2a2a, 0xe8e8e8, 0.8, { ears: "round", tail: "short", stripes: 0xd8d8d8 }, "Does not care how big the rival is."],
+  ["flamingo", "Flamingo", "bird", 0xf090b0, 0xf8c0d0, 0.7, { beak: 0x2a2a2a, legs: 0xf090b0 }, "Stands on one leg, kicks with the other."],
+  ["tarantula", "Tarantula", "spider", 0x4a3020, 0xc8743a, 0.65, {}, "Hairy, scary and on your side."],
+  ["koala", "Koala", "wolf", 0x9a9aa0, 0xe0e0e4, 0.75, { ears: "round", tail: "short" }, "Sleepy until a fight starts."],
+  ["peacock", "Peacock", "bird", 0x2a7ab0, 0x3aa060, 0.7, { crest: 0x3ad0c0 }, "Shows off its feathers, then pecks."],
+  ["collie", "Border Collie", "wolf", 0x2a2a2a, 0xf4f4f4, 1.0, { tail: "bushy" }, "Herds coin piles toward you."],
+  ["bubblegum", "Bubblegum Slime", "slime", 0xf080c0, 0xffc0e0, 0.75, {}, "Sticky, sweet and surprisingly tough."],
+  ["treefrog", "Tree Frog", "frog", 0x50d060, 0xf0f0a0, 0.6, { eyes: 0xe03020 }, "Bright red eyes and sticky toes."],
+  ["coyote", "Coyote", "wolf", 0xb8946a, 0xe8d8c0, 1.05, {}, "Howls at the moon and at rivals."],
+  ["jaguar", "Jaguar", "wolf", 0xd8a040, 0xf4e4c0, 1.25, { tail: "thin", ears: "round", spots: 0x3a2a1a }, "Rules the jungle canopy."],
+  ["eagle", "Golden Eagle", "bird", 0x6a4a2a, 0xd8b060, 0.85, { wings: true, head: 0xe8c070, beak: 0xf0c030 }, "Dives from the clouds at rivals."],
+  ["cobra", "King Cobra", "snake", 0x3a3a2a, 0xd8c890, 1.0, { hood: true, bands: 0x6a6a3a }, "Spreads its hood and strikes fast."],
+  ["snapping", "Snapping Turtle", "turtle", 0x4a5a3a, 0x3a4a2a, 0.95, { spikes: true }, "Bites first and asks later."],
+  ["lavaslime", "Lava Slime", "slime", 0xff6020, 0xffd040, 0.8, { glow: 0xff7020 }, "Hot to the touch. Do not hug it."],
+  ["reindeer", "Reindeer", "wolf", 0x8a5a3a, 0xe8d8c0, 1.3, { horns: true, tail: "short" }, "Pulls a sleigh in its spare time."],
+  ["hyena", "Hyena", "wolf", 0xb8a070, 0xd8c8a0, 1.1, { ears: "round", spots: 0x5a4a30, tail: "thin" }, "Laughs at every hit it lands."],
+  ["scorpion", "Desert Scorpion", "spider", 0xc8903a, 0xe8b860, 0.75, { stinger: true }, "Pinches with its claws, stings with its tail."],
+  ["penguin", "Penguin", "bird", 0x1a1a22, 0xf4f4f4, 0.7, { beak: 0xf0a020 }, "Slides into battle on its belly."],
+  ["cloudedleopard", "Clouded Leopard", "wolf", 0xa89a80, 0xe8e0d0, 1.15, { tail: "thin", spots: 0x4a4030 }, "Climbs down trees head first."],
+  ["moose", "Moose", "wolf", 0x5a3a24, 0x7a5a40, 1.6, { horns: true, tail: "short" }, "Huge antlers, huger attitude."],
+  ["dartfrog", "Poison Dart Frog", "frog", 0x2a6ae0, 0x1a1a3a, 0.55, { spots: 0x10101a }, "Tiny, blue and not to be licked."],
+  ["swan", "Swan", "bird", 0xf8f8f8, 0xffffff, 0.8, { beak: 0xf08030 }, "Graceful on the lake, terrifying on land."],
+  ["frostslime", "Frost Slime", "slime", 0x9ad8f8, 0xe8f8ff, 0.85, { glow: 0xbfe8ff }, "Leaves a trail of frost wherever it bounces."],
+  ["blackwidow", "Black Widow", "spider", 0x16161a, 0xe02020, 0.6, {}, "Small and very dangerous."],
+  ["python", "Python", "snake", 0x8a7a3a, 0xd8c890, 1.25, { bands: 0x4a3a1a }, "Wraps rivals up tight."],
+  ["grizzly", "Grizzly Bear", "wolf", 0x7a5230, 0x9a7250, 1.7, { ears: "round", tail: "short" }, "Stands up tall and roars."],
+  ["seaturtle", "Sea Turtle", "turtle", 0x6a9a7a, 0x3a6a5a, 1.0, {}, "Swims faster than it walks."],
+  ["whitetiger", "White Tiger", "wolf", 0xf4f0e8, 0xffffff, 1.4, { tail: "thin", ears: "round", stripes: 0x2a2a30 }, "Rare, powerful and snow white."],
+  ["unicorn", "Unicorn", "wolf", 0xf8f4ff, 0xffffff, 1.35, { mane: 0xd0a0ff, horn: 0xffd860, tail: "bushy" }, "A real unicorn. Its horn hits hard."],
+  ["pegasus", "Pegasus", "wolf", 0xf4f4f8, 0xffffff, 1.3, { mane: 0xa8c8ff, wings: true, tail: "bushy" }, "A flying horse with silver wings."],
+  ["thunderbird", "Thunderbird", "bird", 0x2a3a6a, 0xf0d040, 1.1, { wings: true, crest: 0x60c0ff, glow: 0x80c0ff }, "Its wings crack like thunder."],
+  ["basilisk", "Basilisk", "snake", 0x2a5a2a, 0xc8d040, 1.35, { hood: true, eyes: 0xc0ff40, glow: 0xa0ff60 }, "Do not look it in the eye."],
+  ["wyvern", "Wyvern", "drake", 0x5a6a3a, 0xc8b878, 1.15, { wings: true }, "A two-legged dragon with a nasty bite."],
+  ["crystalslime", "Crystal Slime", "slime", 0xc8a0ff, 0xffffff, 0.95, { glow: 0xd0b0ff, core: true }, "Sparkles like a geode."],
+  ["phasespider", "Phase Spider", "spider", 0x6a4ab0, 0xb8a0ff, 0.85, { glow: 0x9070ff, eyes: 0xe0d0ff }, "Blinks in and out of sight."],
+  ["firetoad", "Fire Toad", "frog", 0xd04a1a, 0xffb030, 0.8, { glow: 0xff7020 }, "Breathes little puffs of fire."],
+  ["hippogriff", "Hippogriff", "bird", 0xe8dcc8, 0x8a6a4a, 1.2, { wings: true, beak: 0x3a3a3a, head: 0xf4f0e8 }, "Half eagle, half horse, all wings."],
+  ["sabertooth", "Saber-Tooth Cat", "wolf", 0xc8a060, 0xe8d8b0, 1.45, { tail: "short", ears: "round", fangs: true }, "Ancient, huge and long in the tooth."],
+  ["direbear", "Dire Bear", "wolf", 0x3a2a20, 0x5a4a3a, 1.8, { ears: "round", tail: "short", fangs: true }, "A cave bear the size of a cart."],
+  ["lavaturtle", "Lava Turtle", "turtle", 0x5a3a2a, 0x2a1a1a, 1.1, { spikes: true, glow: 0xff6020 }, "Its shell is cooled lava rock."],
+  ["kirin", "Kirin", "wolf", 0x5ab8a8, 0xf0e8b0, 1.35, { mane: 0xf0d060, horn: 0xf0e0a0, tail: "bushy" }, "A gentle beast with a fearsome charge."],
+  ["ghostcat", "Ghost Cat", "wolf", 0xd8e0f0, 0xffffff, 0.9, { tail: "thin", glow: 0xc0d8ff, ghost: true }, "You only see it when it bites."],
+  ["seaserpent", "Sea Serpent", "snake", 0x2a7ab0, 0x9ad8e8, 1.5, { bands: 0x1a5a8a, crest: 0x40d0c0 }, "Rose from the deep to follow you."],
+  ["manticore", "Manticore", "wolf", 0xc8643a, 0xe8b880, 1.5, { mane: 0x8a3a1a, wings: true, stinger: true }, "Lion body, bat wings, scorpion tail."],
+  ["hellcat", "Hellcat", "wolf", 0x1a0a0a, 0xe03a1a, 1.1, { tail: "thin", glow: 0xff4020, eyes: 0xff8020 }, "Purrs like a crackling fire."],
+  ["frostowl", "Frost Owl", "bird", 0xe8f4ff, 0xffffff, 0.85, { wings: true, ears: "tufts", owl: true, glow: 0xbfe8ff }, "Feathers made of snowflakes."],
+  ["jadetoad", "Jade Toad", "frog", 0x3ab07a, 0xc8f0d8, 1.0, { glow: 0x6af0b0 }, "A lucky charm that bites."],
+  ["nightmaresteed", "Nightmare Steed", "wolf", 0x14141c, 0x2a2a3a, 1.45, { mane: 0x8a3aff, glow: 0x8a3aff, eyes: 0xff3a3a, tail: "bushy" }, "A black horse with a mane of purple fire."],
+  ["firedrake", "Fire Drake", "drake", 0xd0401a, 0xffb040, 1.25, { wings: true, glow: 0xff6020 }, "A small dragon with a big temper."],
+  ["kingslime", "King Slime", "slime", 0x60c040, 0xb0f080, 1.3, { crown: true }, "Ruler of all slimes. Wears a tiny crown."],
+  ["spiderqueen", "Spider Queen", "spider", 0x2a1a3a, 0xd040a0, 1.2, { crown: true, glow: 0xd060c0 }, "Commands a thousand tiny legs."],
+  ["worldturtle", "World Turtle", "turtle", 0x5a7a4a, 0x4a6a3a, 1.6, { trees: true }, "Carries a tiny forest on its back."],
+  ["roc", "Roc", "bird", 0x5a3a2a, 0xc8a070, 1.5, { wings: true, beak: 0xe0c040 }, "A bird big enough to carry off a whale."],
+  ["hydra", "Hydra Hatchling", "snake", 0x3a6a2a, 0xb8d070, 1.4, { twin: true, crest: 0x8ac040 }, "Two heads, both hungry."],
+  ["celestialfox", "Celestial Fox", "fox", 0xf0e0a0, 0xffffff, 1.1, { glow: 0xfff0a0 }, "Its tail is made of starlight."],
+  ["voidwolf", "Void Wolf", "wolf", 0x1a1028, 0x5a3a8a, 1.5, { glow: 0x7a4aff, eyes: 0xb080ff }, "Carved from the space between stars."],
+  ["frostwyrm", "Frost Wyrm", "drake", 0xa8d8f0, 0xe8f8ff, 1.4, { wings: true, glow: 0xbfe8ff, horns: true }, "Breathes blizzards."],
+  ["solarlion", "Solar Lion", "wolf", 0xf0b030, 0xffe8a0, 1.6, { mane: 0xff8020, glow: 0xffd060, tail: "thin" }, "Its mane burns like the sun."],
+  ["babykraken", "Baby Kraken", "spider", 0xb04a6a, 0xf0a0b8, 1.2, { eyes: 0xffe060 }, "Eight arms, all of them for grabbing rivals."],
+  ["thunderturtle", "Thunder Turtle", "turtle", 0x3a4a7a, 0x2a3a6a, 1.4, { glow: 0x80c0ff, spikes: true }, "Lightning crackles across its shell."],
+  ["coatl", "Coatl", "snake", 0x3ac0a0, 0xf0e060, 1.5, { wings: true, crest: 0xe04a6a, glow: 0x80ffd0 }, "A feathered serpent that flies."],
+  ["moonowl", "Moon Owl", "bird", 0x8a90c8, 0xe0e4ff, 1.1, { wings: true, ears: "tufts", owl: true, glow: 0xc0c8ff }, "Only hunts by moonlight."],
+  ["starslime", "Star Slime", "slime", 0x2a2a5a, 0xffe880, 1.2, { glow: 0xffe880, stars: true }, "Holds a little galaxy inside."],
+  ["behemoth", "Behemoth", "wolf", 0x6a5a4a, 0x8a7a6a, 2.0, { horns: true, tail: "short", fangs: true }, "The ground shakes when it walks."],
+  ["stormdragon", "Storm Dragon", "drake", 0x3a4a8a, 0xa8c8ff, 1.5, { wings: true, glow: 0x80b0ff, horns: true }, "Rides the lightning."],
+  ["shadowphoenix", "Shadow Phoenix", "bird", 0x2a1a3a, 0xa040ff, 1.3, { wings: true, crest: 0xff40c0, glow: 0xa040ff }, "Rises from shadow instead of flame."],
+  ["goldendragon", "Golden Dragon", "drake", 0xd8a830, 0xfff0a0, 1.6, { wings: true, glow: 0xffd860, horns: true }, "Made of living gold."],
+  ["eternal", "Eternal Guardian", "wolf", 0xf8f4e8, 0xffe8a0, 1.9, { mane: 0xffd860, horn: 0xffffff, wings: true, glow: 0xfff0c0, tail: "thin" }, "The greatest pet of all: a winged lion with a horn of light."]
+];
+const SHAPE_SPD = { turtle: 0.85, slime: 1.05, snake: 1.15, spider: 1.4, frog: 1.2, bird: 1.3 };
+const niceP = v => v < 1000 ? Math.round(v / 10) * 10 : v < 10000 ? Math.round(v / 50) * 50 : Math.round(v / 250) * 250;
+MORE_PETS.forEach(([key, name, shape, color, belly, size, extra, desc], i) => {
+  // bite and reach follow the same price curve as the original pets, so older pets keep their value
+  const price = niceP(120 * Math.pow(1.06, i)), dmg = Math.max(2, Math.round(0.36 * Math.pow(price, 0.42))), reach = Math.round(15 * Math.pow(price, 0.3) / 5) * 5;
+  PETS[key] = Object.assign({ key, name, price, dmg, cd: 1.5 - Math.min(0.3, dmg * 0.012), reach, shape, color, belly, size, blurb: `${desc} Bites for ${dmg} and fetches coin piles within ${reach}.` }, extra);
+  ENEMY_PETS["p_" + key] = Object.assign({ name, shape, color, belly, size, hp: 25 + dmg * 6, dmg: Math.max(2, Math.round(dmg * 0.6)), cd: 1.3, spd: extra.wings ? 1.35 : SHAPE_SPD[shape] || 1.25 }, extra);
+  PET_ORDER.push(key);
+});
+PET_ORDER.sort((a, b) => PETS[a].price - PETS[b].price);
+let petFilter = "all";
+const petShown = k => petFilter === "all" || (petFilter === "own" ? SAVE.pets.includes(k) : !SAVE.pets.includes(k) && (SAVE.coins || 0) >= PETS[k].price);
+
+// ---------- rivals 31 to 130: each one tougher and better paid than the last ----------
+// [id, name, title, shirt, look, weapon, weapon name, trick, extras]
+const MORE_RIVALS = [
+  ["mia", "Mighty Mia", "Small, but swings a huge hammer.", 0xd04a6a, ["band:f0d060"], "hammer", "Mighty Mallet", "charge"],
+  ["dex", "Dagger Dex", "Gets in close and stays there.", 0x2a2a3a, ["mask"], "dagger", "Twin Shivs", "dash", { double: true }],
+  ["olga", "Ox-Strong Olga", "Lifts boulders to warm up.", 0x8a5a2a, ["band:c8402a"], "axe", "Woodsplitter", "regen", { scale: 1.25 }],
+  ["finn", "Fisher Finn", "Throws a mean harpoon.", 0x3a6a8a, ["hat:c8a050"], "spear", "Harpoon", "none"],
+  ["ivy", "Ivy Arrowroot", "Hides in hedges and shoots.", 0x3a7a3a, ["hood:2a5a2a"], "bow", "Hedge Bow", "volley"],
+  ["gwen", "Gale Gwen", "Moves like the wind.", 0x8ab0d0, ["band:3a6ab0"], "katana", "Breeze Blade", "dash"],
+  ["boris", "Big Boris", "A wall of muscle with a mace.", 0x6a2a2a, ["helmet:7a7a7a", "shield"], "hammer", "Boris's Mace", "shield", { scale: 1.3 }],
+  ["luna", "Lantern Luna", "Lights up the battlefield with fire.", 0x2a2a5a, ["hat:1a1a4a", "eyes:ffd060"], "staff:ffb040", "Lantern Staff", "blink"],
+  ["tiko", "Tiki Tiko", "Wears a mask carved from a coconut.", 0xc8642a, ["mask", "band:2a8a6a"], "spear", "Bamboo Spear", "poison"],
+  ["sven", "Sven Snowbeard", "Fights best when it snows.", 0x4a7ab0, ["beard:f0f4ff", "helmet:8a8a8a"], "axe", "Frostbeard Axe", "frost", { hair: 0xf0f4ff }],
+  ["rosa", "Rosa Thornfield", "Every swing has thorns.", 0xb02a4a, ["hood:6a1a2a"], "sword", "Thorn Rapier", "drain"],
+  ["hank", "Hammerhand Hank", "Hammers things for fun.", 0x5a4a3a, ["beard:5a3a1a"], "hammer", "Smithy Hammer", "quake", { scale: 1.2 }],
+  ["zara", "Zara Zephyr", "Rides the breeze from place to place.", 0xe0e0f0, ["band:6ad0e0"], "staff:a0f0ff", "Zephyr Wand", "blink", { volley: true }],
+  ["duke", "Duke the Duelist", "Bows politely, then stabs.", 0x8a1a2a, ["hat:1a1a1a", "cape:8a1a2a"], "katana", "Dueling Rapier", "none", { double: true }],
+  ["pip", "Pip Pebbleshot", "Never runs out of rocks.", 0x6a8a4a, ["hat:5a4a2a"], "sling", "Pocket Sling", "volley"],
+  ["magnus", "Magnus the Mountain", "So big he blocks the sun.", 0x5a5a6a, ["beard:3a2a1a", "pauldrons"], "hammer", "Mountain Maul", "quake", { scale: 1.45 }],
+  ["selene", "Silver Selene", "Strikes from the shadows.", 0x3a3a4a, ["mask", "band:c0c8d8"], "katana", "Moonsilver Blade", "fade", { double: true }],
+  ["rocky", "Rocky Ridge", "Climbs cliffs and charges down them.", 0x8a6a4a, ["helmet:9a8a7a"], "spear", "Ridge Pike", "charge"],
+  ["nyx", "Nyx Nightshade", "Her darts are dipped in poison.", 0x2a1a3a, ["hood:1a0a2a", "eyes:a0ff60"], "staff:a0ff60", "Nightshade Pipe", "poison", { volley: true }],
+  ["bruno", "Bruno Bearclaw", "Fights like a grizzly.", 0x6a3a1a, ["hood:5a3a20"], "dagger", "Bear Claws", "enrage", { scale: 1.25, double: true }],
+  ["astrid", "Astrid Ironshield", "Her shield has never cracked.", 0x4a6a8a, ["helmet:a8a8b0", "shield", "cape:2a4a8a"], "sword", "Shieldmaiden Sword", "shield"],
+  ["quill", "Quill the Quick", "Shoots faster than you can blink.", 0x8a7a3a, ["hood:6a5a2a"], "bow", "Quickfire Bow", "dash"],
+  ["marco", "Marco Mirage", "Is he even really there?", 0xe8c890, ["hood:c8a060"], "katana", "Mirage Scimitar", "fade"],
+  ["gretta", "Granny Gretta", "Older than the hills, and tougher.", 0x6a4a6a, ["hat:4a2a4a"], "staff:ff80c0", "Knitting Staff", "regen", { hair: 0xe8e8e8, volley: true }],
+  ["kai", "Kai Coralblade", "Grew up fighting sharks.", 0x2a8a9a, ["band:f0d060"], "katana", "Coral Katana", "dash", { double: true }],
+  ["ursula", "Ursula Undertow", "Pulls you under with every wave.", 0x1a5a7a, ["crown"], "staff:40d0c0", "Undertow Staff", "drain", { volley: true }],
+  ["titus", "Titus Thunderfist", "Every punch booms like thunder.", 0xe0a020, ["band:3a5aa0"], "hammer", "Thunder Gauntlets", "quake", { scale: 1.3 }],
+  ["nova", "Nova Starfall", "Calls down falling stars.", 0x2a2a6a, ["hat:1a1a4a", "eyes:ffe880"], "staff:ffe880", "Starfall Rod", "blink", { volley: true }],
+  ["grim", "Grim the Gravedigger", "Digs holes. Fills them with rivals.", 0x3a3a3a, ["hat:1a1a1a"], "spear", "Grave Spade", "revive"],
+  ["hazel", "Hazel Hawkwing", "Raised by hawks.", 0x6a4a2a, ["wings:6a4a2a", "band:d8b040"], "bow", "Hawkwing Bow", "volley"],
+  ["otto", "Otto Oakheart", "Gentle as a tree, until you hit him.", 0x4a6a2a, ["beard:5a3a1a"], "axe", "Oakheart Axe", "regen", { scale: 1.3 }],
+  ["jinx", "Jinx the Jester", "Laughs the whole fight.", 0xc83a8a, ["hat:f0d030"], "dagger", "Jester's Knife", "blink", { double: true }],
+  ["petra", "Petra Stoneskin", "Turns her skin to stone.", 0x7a7a70, ["helmet:8a8a80", "shield"], "hammer", "Stone Gavel", "shield", { scale: 1.2 }],
+  ["felix", "Felix Firefoot", "Leaves burning footprints.", 0xd04a1a, ["band:ffd040"], "katana", "Firefoot Blade", "dash", { double: true }],
+  ["morgana", "Morgana Mistveil", "Vanishes into the fog.", 0x5a6a7a, ["hood:4a5a6a", "eyes:a0e0ff"], "staff:a0e0ff", "Mist Staff", "fade", { volley: true }],
+  ["rex", "Rex Raptor", "Wears a dinosaur skull as a helmet.", 0x6a8a3a, ["helmet:e8e0c8", "tusks"], "spear", "Raptor Spear", "charge"],
+  ["isla", "Isla Icewind", "Turns the air to ice.", 0x8ac8e8, ["hood:5aa0c8", "eyes:bff0ff"], "staff:bff0ff", "Icewind Wand", "frost", { volley: true }],
+  ["goliath", "Gentle Goliath", "Doesn't want to fight. Will anyway.", 0x6a6a4a, ["band:4a4a3a"], "hammer", "Pillar Club", "enrage", { scale: 1.6 }],
+  ["sage", "Sage Silverleaf", "A healer who hits back.", 0x6a9a6a, ["hood:4a7a4a"], "staff:a0ffa0", "Silverleaf Staff", "drain"],
+  ["vex", "Vex Venomtail", "Her blade carries poison.", 0x2a4a2a, ["mask", "eyes:c0ff40"], "sword", "Venom Saber", "poison", { double: true }],
+  ["baron", "Baron von Boom", "Everything he hits nearly explodes.", 0x3a2a2a, ["hat:1a1a1a", "cape:8a1a1a"], "hammer", "Boom Hammer", "quake"],
+  ["lyra", "Lyra Lightstep", "Never seems to touch the ground.", 0xf0e0a0, ["band:ffffff"], "spear", "Lightstep Lance", "blink"],
+  ["drago", "Drago Dragonscale", "His armor is real dragon scales.", 0x6a1a1a, ["helmet:4a1a1a", "pauldrons", "shield"], "sword", "Scaleguard Sword", "shield", { scale: 1.15 }],
+  ["kit", "Kit Kestrel", "Shoots from the treetops.", 0xa86a3a, ["hood:7a4a2a"], "bow", "Kestrel Bow", "dash", { volley: true }],
+  ["moira", "Moira Moonblade", "Fights only at night.", 0x2a2a4a, ["mask", "band:c0c8ff"], "katana", "Moonblade", "fade", { double: true }],
+  ["ajax", "Ajax the Unbroken", "Has never stayed down.", 0xb08a3a, ["helmet:c8a050", "shield", "cape:8a1a1a"], "spear", "Unbroken Spear", "revive", { scale: 1.15 }],
+  ["cinder", "Cinder Sal", "Smells like a campfire.", 0x8a2a1a, ["band:ff8020", "eyes:ffb040"], "staff:ff8030", "Cinder Staff", "enrage", { volley: true }],
+  ["fang", "Fang Wolfbrother", "Runs with wolves.", 0x5a5a5a, ["hood:6a6a6a", "ears"], "dagger", "Wolf Fang Knives", "dash", { double: true }],
+  ["beatrix", "Beatrix Bramble", "Grows thorns from her armor.", 0x4a5a2a, ["helmet:5a6a3a", "pauldrons"], "axe", "Bramble Axe", "regen"],
+  ["orion", "Orion Starhunter", "Hunts by the light of the stars.", 0x1a2a5a, ["hood:1a2a4a", "eyes:ffe880"], "bow", "Constellation Bow", "none", { volley: true }],
+  ["helga", "Helga Hammerfall", "Brings the hammer down.", 0x8a3a2a, ["helmet:8a8a8a", "horns:e8e0d0"], "hammer", "Hammerfall", "quake", { scale: 1.3 }],
+  ["shade", "Shade Silentstep", "Makes no sound at all.", 0x1a1a1a, ["mask", "hood:111111"], "katana", "Silent Blade", "fade", { double: true }],
+  ["dorian", "Dorian Dawn", "A knight of the sunrise.", 0xf0d080, ["helmet:f0e0c0", "visor", "shield", "cape:f0a040"], "sword", "Dawnbreaker", "shield", { scale: 1.1 }],
+  ["pixie", "Pixie Puckwick", "Tiny, fast and full of tricks.", 0x80d060, ["ears", "band:f080c0"], "staff:ff80ff", "Pixie Wand", "blink", { volley: true, scale: 0.75 }],
+  ["thorne", "Captain Thorne", "Pirate captain of the Black Rose.", 0x1a1a2a, ["hat:111111", "cape:8a1a3a"], "katana", "Black Rose Cutlass", "enrage", { double: true }],
+  ["ember", "Ember Ashwood", "Burns hotter as she gets hurt.", 0xc84a1a, ["hood:8a2a10", "eyes:ffd040"], "sword", "Ashwood Blade", "enrage"],
+  ["boulder", "Boulder Bill", "Built like a landslide.", 0x7a6a5a, ["band:4a3a2a"], "hammer", "Landslide Maul", "charge", { scale: 1.5 }],
+  ["seraphina", "Seraphina Skye", "Flies on feathered wings.", 0xf0f0ff, ["wings:f0f0ff", "halo"], "spear", "Skyfeather Spear", "blink"],
+  ["ratchet", "Ratchet Rustbolt", "Built his own armor from scrap.", 0x8a6a4a, ["helmet:9a7a5a", "visor", "pauldrons", "shield"], "axe", "Scrap Cleaver", "shield"],
+  ["willow", "Willow Wisp", "Glows faintly in the dark.", 0xc0f0d0, ["hood:80c0a0", "eyes:a0ffd0"], "staff:a0ffd0", "Wisp Staff", "fade", { volley: true }],
+  ["krag", "Krag the Crusher", "Crushes rocks. Crushes rivals.", 0x5a4a3a, ["tusks", "eyes:ff8040"], "hammer", "Crusher", "quake", { scale: 1.55 }],
+  ["valentina", "Valentina Venom", "Every cut stings for days.", 0x6a1a3a, ["mask", "band:c0ff40"], "dagger", "Venom Daggers", "poison", { double: true }],
+  ["atlas", "Atlas Ironback", "Carries the world on his shoulders.", 0x4a4a5a, ["pauldrons", "shield", "helmet:5a5a6a"], "hammer", "Atlas Hammer", "shield", { scale: 1.4 }],
+  ["riven", "Riven Riftwalker", "Steps through tears in the air.", 0x3a1a5a, ["hood:2a0a4a", "eyes:b080ff"], "katana", "Rift Blade", "blink", { double: true }],
+  ["marigold", "Marigold Meadows", "Picks flowers between fights.", 0xf0b030, ["hat:e8d080"], "bow", "Meadowlark Bow", "regen", { volley: true }],
+  ["torvald", "Torvald Thunderhorn", "Blows a horn that shakes the ground.", 0x5a3a2a, ["helmet:8a8a8a", "horns:e8e0d0", "beard:c8a050", "cape:3a5a8a"], "axe", "Thunderhorn Axe", "quake", { scale: 1.25 }],
+  ["echo", "Echo Shadowsong", "Her voice comes from everywhere.", 0x2a2a3a, ["hood:1a1a2a", "eyes:80e0ff"], "staff:80e0ff", "Echo Harp", "fade", { volley: true }],
+  ["brutus", "Brutus Bonecrusher", "His club is a whole tree trunk.", 0x6a4a2a, ["band:8a1a1a", "tusks"], "hammer", "Trunk Club", "enrage", { scale: 1.6 }],
+  ["celeste", "Celeste Starlight", "Shines so bright it hurts.", 0xe8e8ff, ["crown", "eyes:ffffff"], "staff:ffffff", "Starlight Scepter", "drain", { volley: true }],
+  ["jax", "Jax Jetstream", "Faster than anyone alive.", 0x3ab0e0, ["band:ffffff"], "katana", "Jetstream Blade", "dash", { double: true }],
+  ["gideon", "Gideon Grimshield", "Has blocked ten thousand hits.", 0x3a3a3a, ["helmet:4a4a4a", "visor", "shield", "pauldrons", "cape:2a2a2a"], "sword", "Grimblade", "shield", { scale: 1.2 }],
+  ["saffron", "Saffron Sandstorm", "Rides the desert storms.", 0xe0a040, ["hood:c88a30", "mask"], "katana", "Sandstorm Saber", "fade", { double: true }],
+  ["kodiak", "Kodiak Kane", "Has a bear for a best friend.", 0x6a4a2a, ["hood:6a4a2a"], "axe", "Kodiak Axe", "charge", { scale: 1.35 }],
+  ["isolde", "Isolde the Ice Queen", "The coldest stare in the land.", 0xa8d8f0, ["crown", "cape:5aa0d0", "eyes:bff0ff"], "staff:bff0ff", "Ice Queen Scepter", "frost", { volley: true }],
+  ["hector", "Hector the Hero", "Saved a hundred villages. Now he wants to beat you.", 0x2a4a8a, ["helmet:c8c8d0", "shield", "cape:c82a2a"], "sword", "Hero's Blade", "revive", { scale: 1.1 }],
+  ["noctis", "Noctis Nightwing", "Swoops down from the dark.", 0x1a1a2a, ["wings:1a1a2a", "mask", "eyes:ff3a3a"], "dagger", "Nightwing Talons", "blink", { double: true }],
+  ["bramblejack", "Bramble Jack", "Wild as the woods he grew up in.", 0x4a5a2a, ["hood:3a4a1a", "antlers:6a4a2a"], "spear", "Wildwood Spear", "regen"],
+  ["matilda", "Mad Matilda", "Fights with two axes and no plan.", 0x8a1a1a, ["band:f0d030"], "axe", "Twin Axes", "enrage", { double: true }],
+  ["solaris", "Solaris Sunborn", "Born on the hottest day of the year.", 0xf0a020, ["crown", "cape:ff6020", "eyes:ffe080"], "staff:ffe080", "Sunborn Staff", "drain", { volley: true }],
+  ["grendel", "Grendel Gloom", "Lives in a swamp and hates visitors.", 0x3a4a3a, ["ears", "tusks", "eyes:c0ff40"], "hammer", "Gloom Club", "poison", { scale: 1.5 }],
+  ["aria", "Aria Arrowstorm", "Fills the sky with arrows.", 0x5a7a3a, ["hood:3a5a2a"], "bow", "Arrowstorm Bow", "dash", { volley: true }],
+  ["colossus", "Colossus Prime", "A giant made of iron.", 0x6a6a72, ["helmet:7a7a82", "visor", "pauldrons", "eyes:ff6020"], "hammer", "Colossus Hammer", "quake", { scale: 1.75 }],
+  ["raven", "Raven Blackfeather", "A spy with a hundred disguises.", 0x1a1a22, ["hood:111118", "wings:1a1a22"], "katana", "Blackfeather Blade", "fade", { double: true }],
+  ["dante", "Dante Darkfire", "Throws fire that burns black.", 0x2a0a10, ["horns:3a0a0a", "eyes:ff3a2a", "cape:3a0a0a"], "staff:ff4a2a", "Darkfire Staff", "blink", { volley: true }],
+  ["freja", "Freja Frostfang", "Her bite is colder than ice.", 0x6a9ac8, ["hood:4a7aa8", "ears"], "dagger", "Frostfang Knives", "frost", { double: true }],
+  ["maximus", "Maximus the Magnificent", "The crowd's favorite gladiator.", 0xc8a050, ["helmet:d8b040", "shield", "cape:8a1a1a"], "spear", "Magnificent Spear", "charge", { scale: 1.2 }],
+  ["lilith", "Lilith Lifedrinker", "Drinks your energy with each hit.", 0x4a0a2a, ["hood:2a0a1a", "eyes:ff2a5a"], "sword", "Lifedrinker", "drain", { double: true }],
+  ["gregor", "Granite Gregor", "Never moves unless he has to.", 0x7a7a72, ["helmet:8a8a82", "shield", "pauldrons"], "hammer", "Granite Hammer", "shield", { scale: 1.5 }],
+  ["zephyr", "Zephyr Windwalker", "Walks on the wind itself.", 0xc8e8f8, ["band:5aa0d0", "cape:c8e8f8"], "spear", "Windwalker Glaive", "blink", { double: true }],
+  ["medusa", "Madame Medusa", "One look and you slow to a crawl.", 0x3a6a3a, ["crown", "eyes:c0ff40"], "staff:c0ff40", "Gorgon Staff", "frost", { volley: true }],
+  ["ragna", "Ragna Ragestorm", "Gets stronger the angrier she gets.", 0xb02a1a, ["helmet:6a6a6a", "horns:e8e0d0", "cape:6a1a1a"], "axe", "Ragestorm Axe", "enrage", { scale: 1.25, double: true }],
+  ["spectre", "Spectre Pale", "A ghost who still holds a grudge.", 0xd8e0e8, ["hood:c8d0d8", "eyes:80e0ff"], "katana", "Spectral Blade", "revive", { double: true }],
+  ["titania", "Titania Thornqueen", "Queen of the fairies, and not a nice one.", 0x5a8a3a, ["crown", "wings:a0e0a0"], "staff:a0ff80", "Thornqueen Staff", "poison", { volley: true }],
+  ["onyx", "Onyx Blackstone", "Hard as the rock he is named after.", 0x1a1a1a, ["helmet:2a2a2a", "visor", "pauldrons", "shield"], "sword", "Blackstone Blade", "shield", { scale: 1.3 }],
+  ["phoebe", "Phoebe Phoenix", "Gets back up in a burst of flame.", 0xe04a1a, ["wings:ff8020", "eyes:ffd040"], "spear", "Phoenix Glaive", "revive"],
+  ["kronos", "Kronos Timekeeper", "Slows down time around you.", 0x4a3a6a, ["hood:3a2a5a", "beard:e8e8e8", "eyes:ffe080"], "staff:ffe080", "Hourglass Staff", "frost", { volley: true }],
+  ["valkyrie", "Valkyrie Vanguard", "Leads every charge from the front.", 0xd8d8e0, ["helmet:e0e0e8", "wings:f0f0ff", "shield"], "spear", "Valkyrie Spear", "charge", { scale: 1.15 }],
+  ["oberon", "Oberon Oathsworn", "Swore he would never lose.", 0x2a2a6a, ["crown", "pauldrons", "cape:4a2a8a", "shield"], "sword", "Oathsworn Blade", "lich", { double: true }],
+  ["nemesis", "Nemesis", "Knows every move you make.", 0x2a0a2a, ["mask", "hood:1a0a1a", "eyes:ff3aa0"], "katana", "Nemesis Blade", "fade", { double: true }],
+  ["grandmaster", "The Grandmaster", "Has beaten every rival in the land, except you.", 0xf0f0f0, ["crown", "halo", "cape:e8c040", "pauldrons", "shield"], "sword", "Grandmaster's Blade", "shield", { double: true, scale: 1.2 }]
+];
+const SKINS = [0xf0c8a8, 0xe0b496, 0xc99a7c, 0xa8785a, 0x8a5a3c, 0x6a4430], HAIRS = [0x111111, 0x2a1a10, 0x5a3a1a, 0x8a3a1a, 0xc8a050, 0x3a2a1a, 0xd8d0c0];
+MORE_RIVALS.forEach(([id, name, title, shirt, look, wp, wn, ability, ex], j) => {
+  ex = ex || {};
+  const f = Object.assign({
+    id: "r_" + id, name, blurb: describe(title, ability, ex), tip: RIVAL_TIPS[ability] || RIVAL_TIPS.none, ability,
+    skin: SKINS[(j * 7 + 3) % SKINS.length], shirt, pants: tint(shirt, 0x1a1a22, 0.6), hair: HAIRS[(j * 5 + 1) % HAIRS.length], look,
+    hp: 620 + j * 34, speed: 0.86 + (j % 4) * 0.04, cd: Math.max(0.95, 1.3 - j * 0.004), aim: Math.max(0.1, 0.22 - j * 0.0012),
+    reward: 1850 + j * 85, xp: 760 + j * 14, drop: "Mythic", scale: 1, pet: "p_" + MORE_PETS[j][0], idx: RIVALS.length, kind: "Rival", list: RIVALS
+  }, ex);
+  f.volley = !!f.volley || ability === "volley";
+  f.wpn = wpOf(wp, wn, 22 + Math.round(j * 0.4));
+  RIVALS.push(f); FOE_BY_ID[f.id] = f;
+});
+
+// ---------- bad guys 11 to 130, in twelve realms of ten ----------
+const REALMS = ["Jungle Ruins", "Frozen North", "Volcano Depths", "Sunscorch Tombs", "Haunted Harvest", "Murkmire Swamp", "Sakura Shrines", "Crystal Caverns", "Storm Peaks", "Sunken Reef", "Red Mesa", "The Night Realm"];
+// [id, name, flavour, trick, weapon, weapon name, skin, shirt, hair, look, size, extras]
+const MORE_FOES = [
+  // Jungle Ruins
+  ["vine", "Vine Strangler", "A walking tangle of jungle vines.", "regen", "sword", "Thornlash Blade", 0x4a8a3a, 0x2e5a26, 0x3a6a2a, ["eyes:c0ff60", "hood:2e5a26"], 1.1],
+  ["jaguar", "Jaguar Warrior", "An elite guard in a jaguar-skin cloak.", "dash", "katana", "Obsidian Blade", 0xa8785a, 0xd8a040, 0x1a1a1a, ["hood:d8a040", "band:2a8a6a"], 1.0, { double: true, pet: "p_jaguar" }],
+  ["dartfrog", "Dart Frog Shaman", "Blows poison darts from the treetops.", "poison", "staff:60e040", "Dart Pipe", 0x3a7ae0, 0x1a2a5a, 0x1a1a3a, ["eyes:ffe040", "mask"], 0.8, { pet: "p_dartfrog" }],
+  ["temple", "Temple Guardian", "A stone statue that woke up angry.", "shield", "hammer", "Temple Maul", 0x8a8a78, 0x6a6a5a, 0x5a5a4a, ["helmet:7a7a68", "pauldrons", "shield", "eyes:60e0c0"], 1.4],
+  ["monkeyking", "Monkey King", "Swings in from the vines with a golden staff.", "blink", "spear", "Golden Staff", 0x8a5a3a, 0xc83a1a, 0x6a4a2a, ["ears", "crown", "cape:f0c040"], 0.85],
+  ["croc", "Croc Raider", "A crocodile in pirate boots.", "charge", "axe", "Swamp Cleaver", 0x4a6a3a, 0x5a4a2a, 0x3a4a2a, ["snout", "eyes:ffd040"], 1.35],
+  ["explorer", "Cursed Explorer", "Touched the wrong idol. Now he guards it.", "revive", "sword", "Rusted Machete", 0xb8b0a0, 0xa89060, 0x5a4a3a, ["hat:8a6a3a", "eyes:60ff90"], 1.0],
+  ["serpent", "Serpent Priestess", "Speaks to snakes, and they listen.", "volley", "staff:a0ff60", "Serpent Staff", 0xc99a7c, 0x2a6a4a, 0x111111, ["hood:1a4a3a", "band:d8b040", "eyes:a0ff60"], 1.0, { pet: "p_cobra" }],
+  ["silverback", "Silverback Brute", "Beats its chest, then beats you.", "quake", "hammer", "Boulder Fists", 0x3a3a3a, 0x4a4a4a, 0x8a8a8a, ["eyes:ff8040"], 1.6],
+  ["totem", "Totem Lord", "The spirit of the jungle's tallest totem.", "enrage", "axe", "Totem Axe", 0xa86a3a, 0xc8402a, 0x2a1a10, ["bighorns", "cape:2a8a6a", "eyes:ffd040"], 1.5],
+  // Frozen North
+  ["yeti", "Yeti", "A shaggy mountain giant.", "regen", "hammer", "Glacier Club", 0xe8f0f8, 0xd8e4ee, 0xffffff, ["eyes:3a9ae8", "tusks"], 1.6],
+  ["snowwraith", "Snow Wraith", "A ghost made of blowing snow.", "fade", "dagger", "Icicle Dagger", 0xe8f4ff, 0xc8dcec, 0xffffff, ["hood:d8e8f4", "eyes:7ad8ff"], 1.0, { double: true }],
+  ["icearcher", "Ice Archer", "Never misses, even in a blizzard.", "frost", "bow", "Frostbite Bow", 0xf0c8a8, 0x6a9ac8, 0xe8f0ff, ["hood:4a7aa8"], 1.0],
+  ["wolfrider", "Wolf Rider", "Rides into battle beside a giant wolf.", "charge", "spear", "Tundra Lance", 0xe0b496, 0x5a4a3a, 0xc8a050, ["helmet:8a8a8a", "cape:6a2a1a"], 1.15, { pet: "direwolf" }],
+  ["glacierknight", "Glacier Knight", "Wears armor of ice that never melts.", "shield", "sword", "Glacier Blade", 0xc8d8e8, 0x8ab8d8, 0xffffff, ["helmet:bfe0f4", "visor", "pauldrons", "shield", "cape:4a7ab0"], 1.15],
+  ["blizzardmage", "Blizzard Mage", "Throws storms of snow and ice.", "frost", "staff:bff0ff", "Blizzard Staff", 0xe8eef4, 0x3a5a8a, 0xf0f4ff, ["hat:2a4a7a", "beard:f0f4ff", "eyes:bff0ff"], 1.0, { volley: true, pet: "p_frostslime" }],
+  ["frostgiant", "Frost Giant", "Tall as a pine tree and twice as cold.", "quake", "axe", "Frost Giant Axe", 0x9ac0dc, 0x4a6a8a, 0xe8f4ff, ["beard:e8f4ff", "helmet:6a8aa8", "horns:e8e0d0"], 1.75],
+  ["polarraider", "Polar Raider", "A raider who never takes off his furs.", "enrage", "axe", "Raider's Hatchet", 0xf0c8a8, 0xe8e4dc, 0xd89a40, ["helmet:8a8a8a", "horns:e8e0d0", "beard:d89a40"], 1.2],
+  ["avalanche", "Avalanche Troll", "Rolls down mountains for fun.", "charge", "hammer", "Snowboulder Maul", 0x8aa0b0, 0x5a6a7a, 0xd8e8f4, ["ears", "tusks", "eyes:7ad8ff"], 1.6],
+  ["frostqueen", "The Frost Queen", "Rules the north from a castle of ice.", "lich", "staff:bff0ff", "Scepter of Winter", 0xe8f0f8, 0x8ac8f0, 0xffffff, ["crown", "cape:4a9ae0", "eyes:bff0ff"], 1.15, { volley: true, pet: "p_frostowl" }],
+  // Volcano Depths
+  ["lavabrute", "Lava Brute", "Cooling rock with a fiery core.", "charge", "hammer", "Magma Fist", 0x4a2a1a, 0x2a1a10, 0x1a0a08, ["eyes:ff8020"], 1.5, { pet: "p_lavaslime" }],
+  ["ashghoul", "Ash Ghoul", "Crawls out of the ash fields.", "poison", "dagger", "Cinder Claws", 0x8a8480, 0x4a4440, 0x2a2826, ["eyes:ff6020", "hood:3a3634"], 0.95, { double: true }],
+  ["magmaknight", "Magma Knight", "Armor forged inside the volcano.", "shield", "sword", "Magma Blade", 0x5a3a2a, 0x3a1a10, 0x111111, ["helmet:2a1a14", "visor", "pauldrons", "shield", "cape:d04a1a", "eyes:ff6020"], 1.15],
+  ["emberwitch", "Ember Witch", "Brews her potions in lava.", "blink", "staff:ff8a30", "Ember Wand", 0xd8a888, 0x8a2a1a, 0xff6a20, ["hat:5a1a10", "eyes:ffb030"], 1.0, { volley: true, pet: "p_firetoad" }],
+  ["salamander", "Salamander Rogue", "Slips through fire like water.", "dash", "dagger", "Fang Knife", 0xe0601a, 0x8a3a10, 0xffd040, ["eyes:ffe040", "mask"], 0.9, { double: true }],
+  ["obsidian", "Obsidian Sentinel", "A statue of black volcanic glass.", "revive", "spear", "Obsidian Halberd", 0x2a2630, 0x1a1820, 0x111111, ["helmet:2a2630", "eyes:c060ff", "pauldrons"], 1.4],
+  ["cinderarcher", "Cinder Archer", "Arrows that burst into flame.", "volley", "bow", "Cinder Bow", 0xc99a7c, 0x5a2a1a, 0x2a1a10, ["hood:3a1a10", "eyes:ff8020"], 1.0],
+  ["firegiant", "Fire Giant", "Its beard is actually on fire.", "quake", "hammer", "Volcano Hammer", 0xa04a2a, 0x4a2a1a, 0xff7a20, ["beard:ff7a20", "eyes:ffd040", "pauldrons"], 1.8],
+  ["cultist", "Dragon Cultist", "Worships the dragons of the crater.", "drain", "staff:ff4a2a", "Dragonbone Staff", 0xd8b8a0, 0x6a0a10, 0x111111, ["hood:4a0a0a", "eyes:ff3a2a"], 1.0, { pet: "youngdrake" }],
+  ["infernolord", "Inferno Lord", "The burning king of the volcano.", "enrage", "sword", "Inferno Greatsword", 0x6a1a10, 0x2a0a08, 0xff5a10, ["horns:2a1008", "crown", "cape:ff5a10", "wings:3a0a08", "eyes:ffe040"], 1.4, { pet: "p_firedrake" }],
+  // Sunscorch Tombs
+  ["mummy", "Mummy", "Wrapped up tight and very cranky.", "revive", "sword", "Tomb Khopesh", 0xe8dcc0, 0xd8ccb0, 0xc8bca0, ["hood:e8dcc0", "eyes:60e0ff"], 1.0],
+  ["sandwraith", "Sand Wraith", "Rises out of a whirl of sand.", "fade", "katana", "Dune Saber", 0xe8c890, 0xc8a060, 0xe8c890, ["hood:c8a060", "eyes:ffd060"], 1.0, { double: true }],
+  ["scorpionking", "Scorpion King", "Half warrior, all sting.", "charge", "spear", "Stinger Spear", 0xb07a3a, 0x6a3a1a, 0x1a0a08, ["crown", "pauldrons", "eyes:ff6020"], 1.2, { pet: "p_scorpion" }],
+  ["duneraider", "Dune Raider", "Rides the sandstorms looking for loot.", "dash", "katana", "Raider Scimitar", 0x8a5a3c, 0xe8d8a0, 0x111111, ["hood:f0e8d0", "mask"], 1.0],
+  ["tombguard", "Tomb Guardian", "Has guarded one door for three thousand years.", "shield", "spear", "Guardian Glaive", 0x2a2420, 0xd8b040, 0x111111, ["helmet:d8b040", "shield", "ears"], 1.2],
+  ["djinn", "Desert Djinn", "Granted three wishes. All of them were for this fight.", "blink", "staff:60d0ff", "Lamp of Storms", 0x3a8ad8, 0x6a2aa0, 0x111111, ["band:d8b040", "eyes:ffe080"], 1.2, { volley: true }],
+  ["sphinx", "Sphinx Warden", "Ask it a riddle and it attacks.", "quake", "hammer", "Sphinx Paw Maul", 0xd8b070, 0xc8a050, 0x3a6ab0, ["hood:3a6ab0", "band:d8b040", "eyes:60e0ff"], 1.6],
+  ["cobraassassin", "Cobra Assassin", "Strikes before you see it move.", "poison", "dagger", "Cobra Fang", 0xc99a7c, 0x2a4a2a, 0x111111, ["hood:1a3a1a", "mask", "eyes:c0ff40"], 0.95, { double: true, pet: "p_cobra" }],
+  ["sunpriest", "Sun Priest", "Blinds you with light, then hits hard.", "drain", "staff:ffe060", "Sun Disc Staff", 0xa8785a, 0xf0e0a0, 0x111111, ["hat:d8b040", "cape:f0c040", "eyes:ffe060"], 1.0],
+  ["pharaoh", "The Pharaoh's Ghost", "Wants his treasure back.", "lich", "staff:60e0ff", "Crook of Ages", 0xd8e0e8, 0x3a6ab0, 0xd8b040, ["crown", "cape:d8b040", "eyes:60e0ff"], 1.15, { volley: true }],
+  // Haunted Harvest
+  ["scarecrow", "Scarecrow", "Straw stuffing and a sharp scythe.", "regen", "spear", "Scarecrow Scythe", 0xe0b060, 0x8a5a2a, 0xe0c060, ["hat:5a3a1a", "eyes:ff9020"], 1.1],
+  ["pumpkinknight", "Pumpkin Knight", "A knight with a glowing pumpkin for a head.", "shield", "sword", "Harvest Blade", 0xe8781a, 0x2a2a2a, 0x3a6a1a, ["eyes:ffe040", "pauldrons", "shield", "cape:5a2a6a"], 1.15],
+  ["harvestwitch", "Harvest Witch", "Her cauldron always smells like pie.", "poison", "staff:a0ff40", "Broom Staff", 0x8ac06a, 0x2a1a3a, 0x1a1a1a, ["hat:1a1a2a", "eyes:ffd040"], 1.0, { volley: true }],
+  ["werewolf", "Werewolf", "Only comes out under a full moon.", "enrage", "dagger", "Moon Claws", 0x5a4a3a, 0x6a4a2a, 0x4a3a2a, ["ears", "snout", "eyes:ffd040"], 1.3, { double: true }],
+  ["bramble", "Bramble Beast", "A thorny bush that walks.", "drain", "hammer", "Thorn Cudgel", 0x4a3a20, 0x3a5a1a, 0x5a7a2a, ["horns:3a2a1a", "eyes:ff4020"], 1.4],
+  ["crowmistress", "Crow Mistress", "A flock of crows follows her everywhere.", "blink", "staff:9a60ff", "Raven Staff", 0xd8d0c8, 0x1a1a22, 0x111111, ["wings:1a1a22", "hood:1a1a22", "eyes:ff3a3a"], 1.0, { volley: true, pet: "p_bat" }],
+  ["oldoak", "Old Oak", "The oldest tree in the woods, and grumpy about it.", "quake", "hammer", "Oak Branch", 0x6a4a2a, 0x5a3a1a, 0xc8601a, ["beard:5a7a2a", "antlers:6a4a2a", "eyes:ffd040"], 1.8],
+  ["foxbandit", "Fox Bandit", "Steals a coin every time you blink.", "dash", "dagger", "Pickpocket Knife", 0xd8742f, 0x3a2a1a, 0xd8742f, ["ears", "mask", "eyes:ffd040"], 0.85, { double: true }],
+  ["hollowhunter", "Hollow Hunter", "Tracks you through the autumn fog.", "fade", "bow", "Hollow Longbow", 0xc99a7c, 0x6a3a1a, 0x3a2a1a, ["hood:4a2a10", "mask"], 1.0, { volley: true }],
+  ["lanternghost", "Lantern Ghost", "Lights the way to nowhere good.", "lich", "staff:ffd060", "Ghost Lantern", 0xe8ecf4, 0xc8d0e0, 0xe8ecf4, ["hood:c8d0e0", "eyes:ffd060"], 1.1, { volley: true, pet: "p_ghostcat" }],
+  // Murkmire Swamp
+  ["boghag", "Bog Hag", "Lives in a hut on chicken legs.", "poison", "staff:8ac040", "Rotwood Staff", 0x8a9a6a, 0x3a4a2a, 0xa8a8a0, ["hood:3a4a2a", "eyes:c0ff40"], 1.0, { volley: true, pet: "p_hornedtoad" }],
+  ["lurker", "Swamp Lurker", "Waits under the water for you.", "fade", "spear", "Lurker Trident", 0x3a5a3a, 0x2a3a2a, 0x1a2a1a, ["eyes:ffe040", "ears"], 1.1, { double: true }],
+  ["leechlord", "Leech Lord", "Drinks your strength with every hit.", "drain", "sword", "Leechblade", 0x5a3a4a, 0x3a1a2a, 0x2a1a1a, ["crown", "eyes:ff3a5a"], 1.1],
+  ["toadbrute", "Toad Brute", "A giant toad wearing armor.", "quake", "hammer", "Lily Pad Maul", 0x6a8a3a, 0x5a4a2a, 0x4a6a2a, ["helmet:6a6a5a", "eyes:ffd040"], 1.5],
+  ["wisp", "Will-o'-Wisp", "A floating light that leads you astray.", "blink", "staff:a0f0ff", "Wisp Light", 0xb8f0ff, 0x6ad0e0, 0xe0ffff, ["eyes:ffffff"], 0.8, { volley: true }],
+  ["mossgolem", "Moss Golem", "A heap of rocks and moss.", "regen", "hammer", "Mossy Boulder", 0x6a7a5a, 0x4a6a3a, 0x5a8a3a, ["eyes:a0ff60"], 1.6],
+  ["gatorknight", "Gator Knight", "Carries a shield made from a turtle shell.", "shield", "spear", "Gator Lance", 0x4a6a3a, 0x5a5a3a, 0x3a4a2a, ["snout", "shield", "pauldrons", "eyes:ffd040"], 1.25, { pet: "p_snapping" }],
+  ["ratking", "Rat King", "Wears a crown he found in a sewer.", "dash", "dagger", "Rusty Shiv", 0x8a7a70, 0x4a3a30, 0x6a6058, ["ears", "crown", "eyes:ff3a3a"], 0.8, { double: true, pet: "rat" }],
+  ["mirewitch", "Mire Witch", "Her spells stick like mud.", "frost", "staff:9ad060", "Mire Wand", 0xa0b088, 0x2a3a2a, 0x5a6a4a, ["hat:2a3a2a", "eyes:c0ff60"], 1.0, { volley: true }],
+  ["rotwood", "Rotwood Treant", "A dead tree with a very long memory.", "enrage", "hammer", "Rotwood Club", 0x4a3a2a, 0x3a2a1a, 0x5a6a3a, ["antlers:4a3a2a", "beard:5a6a3a", "eyes:c0ff40"], 1.8],
+  // Sakura Shrines
+  ["oni", "Oni Brute", "A red ogre with an iron club.", "charge", "hammer", "Kanabo Club", 0xc8402a, 0x2a2a2a, 0x1a1a1a, ["horns:f0e8d0", "tusks", "eyes:ffd040"], 1.5],
+  ["kitsune", "Kitsune Trickster", "A fox spirit full of tricks.", "blink", "staff:ff9ad0", "Foxfire Bell", 0xf4e8dc, 0xd83a4a, 0xf0f0f0, ["ears", "eyes:ff9ad0"], 0.9, { volley: true, pet: "p_celestialfox" }],
+  ["tengu", "Tengu Warrior", "A crow-winged mountain warrior.", "dash", "katana", "Feather Katana", 0xc8402a, 0x2a2a3a, 0x1a1a1a, ["wings:1a1a2a", "band:f0f0f0", "eyes:ffd040"], 1.0, { double: true }],
+  ["ronin", "Wandering Ronin", "A swordsman with no master and no mercy.", "enrage", "katana", "Ronin Katana", 0xe0b496, 0x4a4a5a, 0x111111, ["hat:8a7a5a", "band:8a1a1a"], 1.0, { double: true }],
+  ["kappa", "Kappa", "A river imp with a bowl on its head.", "regen", "spear", "River Trident", 0x5aa060, 0x3a6a3a, 0x2a5a2a, ["snout", "eyes:ffe040"], 0.85],
+  ["shadowsamurai", "Shadow Samurai", "A suit of armor with nothing inside.", "revive", "katana", "Shadow Nodachi", 0x1a1a22, 0x2a1a2a, 0x111111, ["helmet:1a1a22", "bighorns", "pauldrons", "eyes:ff3a3a"], 1.15],
+  ["lanternspirit", "Paper Lantern Spirit", "A lantern that floats and bites.", "drain", "staff:ffc060", "Candle Flame", 0xf4e0b0, 0xe04a2a, 0xf4e0b0, ["eyes:2a2a2a"], 0.85, { volley: true }],
+  ["silkweaver", "Silk Weaver", "Spins webs between the cherry trees.", "frost", "bow", "Silk Bow", 0xe8dcd8, 0x6a2a6a, 0x111111, ["hood:4a1a4a", "eyes:ff60c0"], 1.0, { volley: true, pet: "p_blackwidow" }],
+  ["thundermonk", "Thunder Monk", "Meditates until lightning strikes.", "quake", "spear", "Thunder Staff", 0xc99a7c, 0xe8a030, 0x111111, ["band:f0d030"], 1.0],
+  ["shogun", "The Dragon Shogun", "Commands the armies of the shrines.", "shield", "katana", "Dragon Shogun Blade", 0xe0b496, 0x8a1a1a, 0x111111, ["helmet:2a2a2a", "bighorns", "pauldrons", "cape:d8b040", "shield", "eyes:ffd040"], 1.25, { double: true }],
+  // Crystal Caverns
+  ["crystalgolem", "Crystal Golem", "A walking pile of glowing gems.", "shield", "hammer", "Geode Fist", 0x9ad0e8, 0x7ab0d8, 0xc8f0ff, ["eyes:ffffff", "pauldrons", "shield"], 1.6, { pet: "p_crystalslime" }],
+  ["prismmage", "Prism Mage", "Splits light into rainbows that burn.", "blink", "staff:ff80ff", "Prism Wand", 0xe8e0f8, 0x6a4ab0, 0xffffff, ["hat:4a2a8a", "eyes:ff80ff"], 1.0, { volley: true }],
+  ["geodecrusher", "Geode Crusher", "Cracks rocks open with its head.", "charge", "hammer", "Crusher Maul", 0x7a6a8a, 0x5a4a6a, 0x3a2a4a, ["bighorns", "eyes:c080ff"], 1.5],
+  ["shardknight", "Shard Knight", "Every hit chips off a sharp shard.", "enrage", "sword", "Shard Blade", 0xc8b8e8, 0x8a6ac8, 0xe8e0ff, ["helmet:a890e0", "visor", "pauldrons", "eyes:e0b0ff"], 1.15],
+  ["amethystwitch", "Amethyst Witch", "Her gems drain your strength.", "drain", "staff:c080ff", "Amethyst Rod", 0xe0d0f0, 0x5a2a8a, 0xc8a0ff, ["hat:3a1a6a", "eyes:e0b0ff"], 1.0, { volley: true }],
+  ["mirrorphantom", "Mirror Phantom", "Shows you your reflection, then attacks it.", "fade", "sword", "Mirror Edge", 0xe8f0f8, 0xb8c8d8, 0xffffff, ["mask", "eyes:80e0ff"], 1.0, { double: true }],
+  ["quartzarcher", "Quartz Archer", "Shoots arrows of clear crystal.", "frost", "bow", "Quartz Bow", 0xf0c8a8, 0x6a9ab0, 0xe8f0ff, ["hood:5a8aa0", "eyes:c8f0ff"], 1.0, { volley: true }],
+  ["gemthief", "Gem Thief", "Has stolen every gem in the caves twice.", "dash", "dagger", "Diamond Dagger", 0xc99a7c, 0x2a2a3a, 0x111111, ["mask", "hood:1a1a2a"], 0.9, { double: true }],
+  ["diamondduke", "The Diamond Duke", "Too rich to lose.", "regen", "sword", "Diamond Rapier", 0xf0d8c8, 0xe8f0ff, 0xc8a050, ["crown", "cape:7ab8e8", "eyes:c8f0ff"], 1.05],
+  ["crystalqueen", "The Crystal Queen", "Rules the glowing caverns.", "lich", "staff:e0b0ff", "Heart of Crystal", 0xd8d0f0, 0x8a6ad8, 0xe8e0ff, ["crown", "cape:6a4ab0", "eyes:e0b0ff"], 1.15, { volley: true, pet: "p_phasespider" }],
+  // Storm Peaks
+  ["stormgiant", "Storm Giant", "Its footsteps sound like thunder.", "quake", "hammer", "Thunderclap Hammer", 0x7a8aa8, 0x3a4a6a, 0xd8e0f0, ["beard:d8e0f0", "eyes:80c0ff", "pauldrons"], 1.85],
+  ["harpy", "Thunder Harpy", "Screeches lightning from above.", "blink", "staff:a0d0ff", "Storm Feather", 0xd8c0a8, 0x6a7a9a, 0x8a9ab0, ["wings:6a7a9a", "eyes:ffe040"], 0.95, { volley: true, pet: "p_thunderbird" }],
+  ["lancer", "Lightning Lancer", "Charges faster than a lightning bolt.", "charge", "spear", "Bolt Lance", 0xe0b496, 0x3a5aa0, 0xf0e060, ["helmet:c8d0e0", "visor", "cape:f0e060"], 1.15],
+  ["galerider", "Gale Rider", "Surfs the wind on a flying shield.", "dash", "katana", "Gale Saber", 0xf0c8a8, 0x8ab0d0, 0xd8e8f8, ["band:3a6ab0", "cape:8ab0d0"], 1.0, { double: true }],
+  ["cloudwraith", "Cloud Wraith", "A storm cloud with an attitude.", "fade", "dagger", "Mist Fang", 0xc8d0dc, 0x8a94a4, 0xe0e4ec, ["hood:8a94a4", "eyes:80c0ff"], 1.05, { double: true }],
+  ["staticgolem", "Static Golem", "Buzzes and crackles when it moves.", "shield", "hammer", "Tesla Maul", 0x5a6070, 0x3a4050, 0xf0e060, ["helmet:4a5060", "eyes:f0e060", "pauldrons", "shield"], 1.55, { pet: "p_thunderturtle" }],
+  ["tempestwitch", "Tempest Witch", "Her hair is a tiny tornado.", "frost", "staff:80c0ff", "Tempest Staff", 0xe8e0f0, 0x3a3a6a, 0xd0d0ff, ["hat:2a2a5a", "eyes:80c0ff"], 1.0, { volley: true }],
+  ["skypirate", "Sky Pirate Captain", "Sails an airship through the clouds.", "enrage", "sword", "Skyhook Cutlass", 0xc99a7c, 0x1a2a5a, 0x2a1a10, ["hat:1a1a1a", "band:d8b040", "cape:8a1a2a"], 1.1, { double: true, pet: "p_parrot" }],
+  ["rainshade", "Rain Shade", "Soaks you through, then drains you.", "drain", "sword", "Rain Blade", 0x9aa8c0, 0x4a5a7a, 0x6a7a9a, ["hood:3a4a6a", "eyes:a0c8ff"], 1.0],
+  ["stormking", "The Storm King", "Wears a crown of lightning.", "lich", "staff:f0e060", "Scepter of Storms", 0xd8e0f0, 0x2a3a6a, 0xf0f4ff, ["crown", "beard:f0f4ff", "cape:f0e060", "eyes:f0e060"], 1.25, { volley: true, pet: "p_stormdragon" }],
+  // Sunken Reef
+  ["ghostcaptain", "Ghost Captain", "Still sails a ship that sank long ago.", "revive", "sword", "Phantom Cutlass", 0xb8e0d8, 0x2a4a5a, 0xd8f0e8, ["hat:1a2a2a", "beard:d8f0e8", "eyes:60ffd0"], 1.05, { double: true }],
+  ["seawitch", "Sea Witch", "Trades wishes for your voice.", "drain", "staff:40e0c0", "Trident Wand", 0x8ab0d0, 0x4a2a6a, 0xe8e8f0, ["crown", "eyes:40e0c0"], 1.1, { volley: true }],
+  ["sharkraider", "Shark Raider", "All teeth and no manners.", "charge", "axe", "Sharktooth Axe", 0x7a8a9a, 0x3a4a5a, 0x5a6a7a, ["snout", "tusks", "eyes:ffffff"], 1.35],
+  ["krakencultist", "Kraken Cultist", "Prays to the thing beneath the waves.", "poison", "staff:c060ff", "Inkspell Staff", 0xc8b8c8, 0x3a1a4a, 0x111111, ["hood:2a0a3a", "eyes:c060ff"], 1.0, { volley: true, pet: "p_babykraken" }],
+  ["coralgolem", "Coral Golem", "A reef that grew legs.", "regen", "hammer", "Coral Club", 0xf07a8a, 0xd85a6a, 0xf0a0b0, ["horns:f0a0b0", "eyes:ffffff"], 1.6],
+  ["siren", "Siren", "Her song makes your feet heavy.", "frost", "staff:a0f0ff", "Siren Harp", 0xa8d8d0, 0x3a8a9a, 0x40c0b0, ["eyes:ffffff"], 1.0, { volley: true }],
+  ["barnacleknight", "Barnacle Knight", "Covered head to toe in barnacles.", "shield", "sword", "Barnacle Blade", 0x8a9a8a, 0x5a6a6a, 0x3a4a4a, ["helmet:7a8a7a", "pauldrons", "shield", "eyes:ffe040"], 1.2, { pet: "p_seaturtle" }],
+  ["merrow", "Merrow Warrior", "Guards the gates of the sunken city.", "dash", "spear", "Coral Spear", 0x5aa0a0, 0x2a6a7a, 0x1a4a5a, ["ears", "band:f0d060"], 1.05, { double: true }],
+  ["tidemage", "Tide Mage", "Calls waves that knock you flat.", "quake", "staff:60d0ff", "Tide Staff", 0xa8c8d8, 0x1a5a8a, 0xd8f0ff, ["hat:1a4a7a", "beard:d8f0ff"], 1.0],
+  ["leviathanknight", "The Leviathan Knight", "Rides a sea monster into battle.", "enrage", "spear", "Leviathan Trident", 0x4a7a8a, 0x1a3a5a, 0x2a5a6a, ["helmet:2a5a7a", "visor", "pauldrons", "cape:1a8aa0", "shield", "eyes:60ffd0"], 1.3, { pet: "p_seaserpent" }],
+  // Red Mesa
+  ["outlaw", "Outlaw Archer", "The fastest bow in the west.", "dash", "bow", "Quickdraw Crossbow", 0xe0b496, 0x6a3a1a, 0x3a2a1a, ["hat:3a2a1a", "mask"], 1.0, { volley: true }],
+  ["banditboss", "Bandit Boss", "Runs every gang in the canyon.", "enrage", "axe", "Boss's Hatchet", 0xc99a7c, 0x8a2a1a, 0x2a1a10, ["hat:1a1a1a", "beard:2a1a10", "band:d8b040"], 1.2, { pet: "p_coyote" }],
+  ["rattlesnakekid", "Rattlesnake Kid", "Bites like his namesake.", "poison", "dagger", "Rattler Knife", 0xf0c8a8, 0xc8a060, 0xd89a40, ["hat:8a6a3a", "band:6a3a1a"], 0.9, { double: true, pet: "p_rattlesnake" }],
+  ["canyonbrute", "Canyon Brute", "Throws boulders for breakfast.", "quake", "hammer", "Canyon Boulder", 0xa8643a, 0x6a3a1a, 0x3a2a1a, ["eyes:ffb040", "tusks"], 1.7],
+  ["dustdevil", "Dust Devil", "A spinning whirlwind of red dust.", "blink", "katana", "Whirlwind Blade", 0xd8844a, 0xa85a2a, 0xe8a060, ["horns:6a2a10", "eyes:ffe040"], 0.95, { double: true }],
+  ["goldgolem", "Gold Golem", "Made of stolen gold. Very heavy.", "shield", "hammer", "Golden Maul", 0xe0b030, 0xc89020, 0xf0d060, ["eyes:ffffff", "pauldrons", "shield", "crown"], 1.6],
+  ["bonecollector", "Bone Collector", "Collects bones, and wants yours.", "revive", "spear", "Bone Scythe", 0xe8e2d0, 0x2a2a2a, 0xe8e2d0, ["hat:1a1a1a", "eyes:ff6020"], 1.05, { pet: "bonehound" }],
+  ["thunderbird", "Thunderbird Shaman", "Calls storms across the desert.", "frost", "staff:80c0ff", "Thunder Feather Staff", 0xa8643a, 0x2a6a8a, 0x111111, ["band:d8402a", "wings:3a5a8a", "eyes:80c0ff"], 1.0, { volley: true, pet: "p_eagle" }],
+  ["coyote", "Coyote Trickster", "Never fights fair, and never the same way twice.", "fade", "dagger", "Trickster Knife", 0xc8a070, 0x6a4a2a, 0xc8a070, ["ears", "snout", "eyes:ffd040"], 0.95, { double: true }],
+  ["sheriff", "The Shadow Sheriff", "Runs this town, and you are not welcome.", "drain", "sword", "Sheriff's Saber", 0x8a8890, 0x1a1a22, 0x111111, ["hat:1a1a1a", "cape:3a1a1a", "eyes:ff3a3a"], 1.1, { pet: "p_nightmaresteed" }],
+  // The Night Realm
+  ["vampire", "Vampire Lord", "Never seen in daylight. Never full.", "drain", "sword", "Bloodfang Rapier", 0xe8e4e8, 0x1a1a22, 0x111111, ["cape:8a0a1a", "wings:2a0a10", "eyes:ff2a2a"], 1.1, { pet: "p_bat" }],
+  ["moonwitch", "Moon Witch", "Draws her power from the full moon.", "frost", "staff:c0c8ff", "Moonstone Staff", 0xd8dcf0, 0x2a2a5a, 0xe8ecff, ["hat:1a1a4a", "eyes:c0c8ff"], 1.0, { volley: true, pet: "p_moonowl" }],
+  ["shadowstalker", "Shadow Stalker", "You only ever see its eyes.", "fade", "dagger", "Umbral Fang", 0x14141a, 0x0a0a10, 0x0a0a0a, ["hood:0a0a10", "eyes:a080ff"], 1.0, { double: true }],
+  ["nightmareknight", "Nightmare Knight", "Rides out of your worst dreams.", "charge", "sword", "Nightmare Blade", 0x2a2a3a, 0x14141c, 0x111111, ["helmet:1a1a24", "visor", "pauldrons", "cape:5a2a8a", "eyes:a040ff"], 1.25, { pet: "p_nightmaresteed" }],
+  ["stareater", "Star Eater", "Swallowed half the night sky.", "regen", "hammer", "Void Maul", 0x1a1430, 0x2a1a4a, 0xffe880, ["eyes:ffe880", "horns:ffe880"], 1.6, { pet: "p_starslime" }],
+  ["voidmage", "Void Mage", "Bends space around you.", "blink", "staff:9a60ff", "Void Staff", 0xc8c0e0, 0x1a0a2a, 0x111111, ["hood:1a0a2a", "eyes:9a60ff"], 1.0, { volley: true, pet: "p_voidwolf" }],
+  ["eclipsewarden", "Eclipse Warden", "Guards the moment the sun goes dark.", "shield", "spear", "Eclipse Halberd", 0x3a3048, 0x1a1424, 0xf0c040, ["helmet:2a2034", "pauldrons", "shield", "halo", "eyes:f0c040"], 1.25],
+  ["fallenangel", "Fallen Angel", "Lost its halo but kept its sword.", "revive", "sword", "Fallen Star Blade", 0xe8e0e8, 0x3a3a4a, 0xe8e8f0, ["wings:4a4a5a", "eyes:ff6060"], 1.15, { double: true, pet: "p_shadowphoenix" }],
+  ["chaostitan", "Chaos Titan", "The ground cracks wherever it steps.", "quake", "hammer", "Titan's Hammer", 0x5a2a3a, 0x2a1020, 0xff4060, ["bighorns", "pauldrons", "eyes:ff4060", "beard:2a1020"], 1.9, { pet: "p_behemoth" }],
+  ["emperor", "The Eternal Emperor", "The last bad guy. Beat him and you have beaten them all.", "lich", "sword", "Blade of Eternity", 0xf0e8d8, 0xe8c040, 0xffffff, ["crown", "halo", "wings:f0e8c0", "cape:8a1a8a", "pauldrons", "eyes:ffe080"], 1.3, { double: true, pet: "p_eternal" }]
+];
+MORE_FOES.forEach(([id, name, flavor, ability, wp, wn, skin, shirt, hair, look, scale, o], n) => {
+  o = o || {};
+  const f = {
+    id: "b_" + id, name, realm: REALMS[Math.floor(n / 10)], ability, scale, skin, shirt, hair, look,
+    pants: tint(shirt, 0x14141a, 0.55), double: !!o.double, volley: !!o.volley || ability === "volley",
+    hp: 600 + n * 30, speed: (scale >= 1.4 ? 0.7 : scale <= 0.9 ? 1.08 : 0.86) + (ability === "dash" || ability === "blink" ? 0.08 : 0),
+    cd: Math.max(0.95, 1.5 - n * 0.005), aim: Math.max(0.12, 0.3 - n * 0.0015),
+    reward: 1300 + n * 85, xp: 650 + n * 12, drop: "Mythic", wpn: wpOf(wp, wn, 18 + Math.round(n * 0.36)),
+    blurb: describe(flavor, ability, o), tip: RIVAL_TIPS[ability] || RIVAL_TIPS.none,
+    pet: o.pet || "p_" + MORE_PETS[Math.min(99, Math.floor(n * 100 / 120))][0],
+    idx: FOES.length, list: FOES, kind: "Bad guy"
+  };
+  FOES.push(f); FOE_BY_ID[f.id] = f;
+});
+
+// ---------- goals for the new characters ----------
+for (const g of GOALS) { if (g.id === "petsAll") g.text = "Adopt 23 pets"; if (g.id === "rivalsAll") g.text = "Beat 30 named rivals"; }
+const beatenOf = list => list.filter(f => SAVE.foes[f.id]).length;
+GOALS.push(
+  { id: "foes25", text: "Defeat 25 different bad guys", reward: 1500, need: 25, val: () => beatenOf(FOES) },
+  { id: "foes60", text: "Defeat 60 different bad guys", reward: 4000, need: 60, val: () => beatenOf(FOES) },
+  { id: "foesEvery", text: `Defeat all ${FOES.length} bad guys`, reward: 20000, need: FOES.length, val: () => beatenOf(FOES) },
+  { id: "rivals50", text: "Beat 50 named rivals", reward: 3000, need: 50, val: () => beatenOf(RIVALS) },
+  { id: "rivals100", text: "Beat 100 named rivals", reward: 8000, need: 100, val: () => beatenOf(RIVALS) },
+  { id: "rivalsEvery", text: `Beat all ${RIVALS.length} named rivals`, reward: 20000, need: RIVALS.length, val: () => beatenOf(RIVALS) },
+  { id: "pets25", text: "Adopt 25 pets", reward: 2000, need: 25, val: () => SAVE.pets.length },
+  { id: "pets60", text: "Adopt 60 pets", reward: 6000, need: 60, val: () => SAVE.pets.length },
+  { id: "petsEvery", text: `Adopt all ${PET_ORDER.length} pets`, reward: 25000, need: PET_ORDER.length, val: () => SAVE.pets.length }
+);
+
 let fightKind = "duel";
 function startBattle(kind) {
   if (scene !== "explore") return;
@@ -2933,33 +3558,35 @@ function renderFight() {
     `<li class="isle-row" style="--isle:#d9c49a"><div class="isle-text"><b>Boss: Stone Giant</b><span>Twice your size with ${bossHp()} health and a Pebble Golem pet, and tougher each time you beat it. Its ground slam hits hard and wide: when the ! appears, roll away. Your win streak is safe either way.</span><span class="isle-meta">Win: 400 coins, 300 XP and a Rare weapon${gw ? ` · Beaten ${gw} time${gw === 1 ? "" : "s"}` : ""}</span></div>` +
     (lv >= 3 ? `<button class="sail" type="button" data-fight="boss">Fight the giant</button>` : `<button class="sail" type="button" disabled>Unlocks at level 3</button>`) + `</li>` +
     foeRows(FOES, "Bad guys: beat each one to unlock the next. First win drops a weapon") +
-    foeRows(RIVALS, "Named rivals: 30 fighters, each with a pet. Beat each one to unlock the next") +
+    foeRows(RIVALS, "Named rivals: each brings a pet. Beat each one to unlock the next") +
     "";
+  fillPortraits($("#fightList"));
 }
 function foeRows(list, title) {
-  let out = `<li class="fight-sect">${title} (${list.filter(f => SAVE.foes[f.id]).length}/${list.length} beaten)</li>`, shownLocked = false, hidden = 0;
-  for (const f of list) {
-    const open = foeUnlocked(f);
-    if (!open) { if (shownLocked) { hidden++; continue; } shownLocked = true; }
-    out += foeRow(f);
-  }
-  if (hidden) out += `<li class="fight-sect">${hidden} more locked</li>`;
+  const beaten = list.filter(f => SAVE.foes[f.id]), next = list.filter(f => !SAVE.foes[f.id] && foeUnlocked(f)), locked = list.filter(f => !foeUnlocked(f));
+  let out = `<li class="fight-sect">${title} (${beaten.length}/${list.length} beaten)</li>` + next.map(foeRow).join("");
+  if (locked.length) out += foeRow(locked[0]);
+  if (locked.length > 1) out += `<li class="fight-sect">${locked.length - 1} more locked</li>`;
+  if (beaten.length) out += `<li class="beaten-wrap"><details><summary>Fight a beaten one again (${beaten.length})</summary><ul class="isles-list">${beaten.slice().reverse().map(foeRow).join("")}</ul></details></li>`;
   return out;
 }
 function foeRow(f) {
   {
       const open = foeUnlocked(f), beat = SAVE.foes[f.id] || 0;
       const btn = open ? `<button class="sail" type="button" data-fight="${f.id}">Fight</button>` : `<button class="sail" type="button" disabled>Beat ${f.list[f.idx - 1].name} first</button>`;
-      return `<li class="isle-row foe-row" style="--isle:#c0404a"><div class="isle-text"><b>${f.idx + 1}. ${f.name}</b><span>${open ? f.blurb : "Locked."}</span><span class="isle-meta">${f.hp} health · Pet: ${ENEMY_PETS[FOE_PET[f.id] || f.pet].name} · Win ${f.reward} coins${beat ? ` · Beaten ${beat}x` : ` · First win: ${f.drop} weapon`}</span></div>${btn}</li>`;
+      return `<li class="isle-row foe-row" style="--isle:#c0404a"><canvas class="pv" data-foe="${f.id}"${open ? "" : ' data-lock="1"'} width="96" height="120" aria-hidden="true"></canvas><div class="isle-text"><b>${f.idx + 1}. ${f.name}</b><span>${open ? f.blurb : "Locked."}</span><span class="isle-meta">${f.realm ? f.realm + " · " : ""}${f.hp} health · Pet: ${ENEMY_PETS[FOE_PET[f.id] || f.pet].name} · Win ${f.reward} coins${beat ? ` · Beaten ${beat}x` : ` · First win: ${f.drop} weapon`}</span></div>${btn}</li>`;
   }
 }
 function renderStyle() {
-  $("#styleCoins").textContent = `You have ${SAVE.coins} coins.`;
-  $("#petList").innerHTML = PET_ORDER.map(k => {
+  $("#styleCoins").textContent = `You have ${SAVE.coins} coins. You own ${SAVE.pets.length} of ${PET_ORDER.length} pets.`;
+  $("#petList").innerHTML = PET_ORDER.filter(petShown).map(k => {
     const d = PETS[k], own = SAVE.pets.includes(k), on = SAVE.pet === k;
     const btn = on ? `<button class="sail alt" type="button" data-petoff="1">Send home</button>` : own ? `<button class="sail" type="button" data-pet="${k}">Bring along</button>` : `<button class="sail" type="button" data-buypet="${k}" ${SAVE.coins < d.price ? "disabled" : ""}>${d.price.toLocaleString()} coins</button>`;
-    return `<li class="shop-row"><div class="isle-text"><b>${d.name}${on ? " (with you)" : ""}</b><span>${d.blurb}</span></div>${btn}</li>`;
+    return `<li class="shop-row"><canvas class="pv pet" data-pet="${k}" width="120" height="96" aria-hidden="true"></canvas><div class="isle-text"><b>${d.name}${on ? " (with you)" : ""}</b><span>${d.blurb}</span></div>${btn}</li>`;
   }).join("");
+  if (!$("#petList").children.length) $("#petList").innerHTML = `<li class="empty">${petFilter === "own" ? "You have not adopted a pet yet." : "Nothing you can afford yet. Win battles for more coins."}</li>`;
+  fillPortraits($("#petList"));
+  document.querySelectorAll("#petFilter [data-pf]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.pf === petFilter)));
   $("#outfitList").innerHTML = OUTFITS.map((o, i) => {
     const ok = o.ok(), on = SAVE.outfit === i;
     return `<li class="outfit${on ? " on" : ""}"><button type="button" data-outfit="${i}" ${ok ? "" : "disabled"}><span class="swatch" style="background:#${o.shirt.toString(16).padStart(6, "0")}"></span><b>${o.name}</b><span class="why">${on ? "Wearing" : ok ? "Tap to wear" : o.need}</span></button></li>`;
@@ -3000,7 +3627,7 @@ function resetFight() {
   ti = Math.max(0, ti - D.drop);
   const rw = foe ? { name: foe.wpn.name, tier: "Rare", dmg: 1 } : boss ? { name: "Giant's Stone Club", tier: "Rare", dmg: 7 } : makeWeapon(tiers[ti]);
   const mhp = maxHpNow();
-  Object.assign(P, newActor(), { wpn: weaponProfile(pw), hp: mhp, maxHp: mhp, taken: 0, rollT: 0, rollCd: 0, power: 0 });
+  Object.assign(P, newActor(), { wpn: weaponProfile(pw), hp: mhp, maxHp: mhp, taken: 0, rollT: 0, rollCd: 0, power: 0, poisonT: 0, slowT: 0 });
   const [ps, es] = randomStarts(); P.x = ps.x; P.y = ps.y; P.face = Math.atan2(es.y - ps.y, es.x - ps.x);
   const rp = weaponProfile(rw); rp.dmg = Math.max(2, Math.round(rp.dmg * D.dmg));   // the rival's weapon hits softer than yours would
   if (boss) Object.assign(rp, { range: 74, cd: 1, dmg: 15 + 2 * Math.min(5, SAVE.stats.bosses) });
@@ -3034,13 +3661,14 @@ function updateBattle(dt, t, turn, fwd) {
   }
   if (P.cd > 0) P.cd -= dt;
   if (P.slowT > 0) P.slowT -= dt;
+  if (P.poisonT > 0 && !battleOver) { P.poisonT -= dt; P.hp = Math.max(0, P.hp - (P.poisonDps || 3) * dt); P.taken = (P.taken || 0) + (P.poisonDps || 3) * dt; if (P.hp <= 0) endBattle(false); }
   for (const p of potions) {
     if (p.taken) { p.back -= dt; if (p.back <= 0) p.taken = false; continue; }
     if (battleOver) continue;
     for (const a of [P, B]) if (a.hp > 0 && a.hp < a.maxHp && Math.hypot(a.x - p.x, a.y - p.y) < 26) {
       const heal = Math.min(35, a.maxHp - a.hp); a.hp += heal; p.taken = true; p.back = 20;
       pops.push({ id: Math.random(), x: a.x, y: a.y, txt: `+${Math.round(heal)}`, life: 1, color: "#7dff9a" });
-      if (a === P) { SAVE.stats.potions++; sfx("potion"); } else notify("The rival drank a potion");
+      if (a === P) { SAVE.stats.potions++; sfx("potion"); if (P.poisonT > 0) { P.poisonT = 0; pops.push({ id: Math.random(), x: P.x + 6, y: P.y, txt: "Cured", life: 0.9, color: "#a0ff60" }); } } else notify("The rival drank a potion");
       break;
     }
   }
@@ -3103,7 +3731,7 @@ function playerAttack() {
   attack(P, tgt); P.cd = P.wpn.cd;
 }
 function attack(a, tgt) {
-  const w = a.wpn, dx = tgt.x - a.x, dy = tgt.y - a.y, d = Math.hypot(dx, dy);
+  const w = a.wpn, dx = tgt.x - a.x, dy = tgt.y - a.y, d = Math.hypot(dx, dy), quake = !!(a.foe && a.foe.ability === "quake");
   a.swingT = 0.18;
   if (d < (w.ranged ? w.range + 150 : 160)) a.face = Math.atan2(dy, dx);
   sfx(w.ranged ? "shoot" : "swing");
@@ -3114,9 +3742,10 @@ function attack(a, tgt) {
       const glow = w.tier === "Legendary" || w.tier === "Mythic" ? (w.tier === "Mythic" ? 0xf0a0ff : 0x9ff0ff) : 0;
       shots.push({ x: a.x + Math.cos(ang) * 14, y: a.y + Math.sin(ang) * 14, vx: Math.cos(ang) * w.speed, vy: Math.sin(ang) * w.speed, life: w.range / w.speed, owner: a, dmg: w.dmg, kind: w.kind, col: w.color || 0, glow });
     }
-  } else if (d <= w.range + 12 + ((tgt.sc || 1) - 1) * 13) hit(a, tgt, w.dmg, a.D && a.D.boss ? 40 : a.sc > 1.3 ? 30 : 0);
+  } else if (d <= Math.max(w.range + 12 + ((tgt.sc || 1) - 1) * 13, quake ? 105 : 0)) hit(a, tgt, w.dmg, a.D && a.D.boss ? 40 : a.sc > 1.3 || quake ? 30 : 0);
   else pops.push({ id: Math.random(), x: a.x + Math.cos(a.face) * 26, y: a.y + Math.sin(a.face) * 26, txt: "miss", life: 0.5, color: "#c9d0c2" });
   if (a.D && a.D.boss) { ring(a.x, a.y, 0xd9c49a, 150); shake = Math.max(shake, 0.3); sfx("slam"); }
+  if (quake) { ring(a.x, a.y, 0xd9c49a, 130); shake = Math.max(shake, 0.25); sfx("slam"); if (w.ranged && d < 105) hit(a, tgt, Math.round(w.dmg * 0.8), 30); }
 }
 function hit(a, tgt, dmg, kb, isSuper) {
   if (battleOver) return;
@@ -3141,7 +3770,9 @@ function hit(a, tgt, dmg, kb, isSuper) {
     pops.push({ id: Math.random(), x: tgt.x + 4, y: tgt.y, txt: "Blocked", life: 0.7, color: "#c8ccd8" });
   }
   if (((a.foe && a.foe.ability === "frost") || (a.def && a.def.frost)) && tgt === P) { P.slowT = 1.6; pops.push({ id: Math.random(), x: P.x - 6, y: P.y, txt: "Frozen", life: 0.9, color: "#9fe8ff" }); }
+  if (a.foe && a.foe.ability === "poison" && tgt === P) { if (!(P.poisonT > 0)) pops.push({ id: Math.random(), x: P.x - 6, y: P.y, txt: "Poisoned", life: 0.9, color: "#a0ff60" }); P.poisonT = 4; P.poisonDps = Math.max(3, Math.round((a.wpn.dmg || 10) * 0.18)); }
   tgt.hp = Math.max(0, tgt.hp - dmg); tgt.hurtT = 0.25;
+  if (a.foe && a.foe.ability === "drain" && tgt === P && a.hp > 0) { const hl = Math.min(a.maxHp - a.hp, Math.round(dmg * 0.5)); if (hl > 0) { a.hp += hl; pops.push({ id: Math.random(), x: a.x, y: a.y, txt: `+${hl}`, life: 0.9, color: "#ff7a9a" }); } }
   if (tgt === P) { P.taken = (P.taken || 0) + dmg; shake = Math.max(shake, crit ? 0.35 : 0.22); sfx("hurt"); }
   else { if (crit) shake = Math.max(shake, 0.2); sfx(crit ? "crit" : "hit"); }
   // the super meter fills as you land hits, take hits and dodge
@@ -3246,7 +3877,8 @@ $("#fightList").addEventListener("click", e => { const b = e.target.closest("[da
 $("#styleBtn").addEventListener("click", () => { closePanels(); renderStyle(); $("#stylePanel").hidden = false; keys.clear(); });
 $("#styleClose").addEventListener("click", () => { $("#stylePanel").hidden = true; });
 $("#stylePanel").addEventListener("click", e => {
-  const buy = e.target.closest("[data-buypet]"), use = e.target.closest("[data-pet]"), off = e.target.closest("[data-petoff]"), of = e.target.closest("[data-outfit]");
+  const pf = e.target.closest("[data-pf]"); if (pf) { petFilter = pf.dataset.pf; renderStyle(); return; }
+  const buy = e.target.closest("[data-buypet]"), use = e.target.closest("button[data-pet]"), off = e.target.closest("[data-petoff]"), of = e.target.closest("[data-outfit]");
   if (buy) {
     const k = buy.dataset.buypet, d = PETS[k];
     if (SAVE.coins < d.price || SAVE.pets.includes(k)) return;
@@ -3689,7 +4321,7 @@ const hot = window.claude && window.claude.hot;
 if (hot && typeof hot.snapshot === "function") { try { hot.snapshot(() => { if (SAVE) captureIsland(); return { save: SAVE }; }); } catch (e) { } }
 if (hot && typeof hot.ready === "function") hot.ready(start); else start((hot && hot.data) || {});
 
-window.__bg = { get EP() { return EP; }, FOES, setFight(k) { fightKind = k; }, get dragons() { return WE && WE.dragons; }, forceDive() { if (WE && WE.dragons) WE.diveIn = 0; }, playerSuper, renderFight, renderStyle, claimDaily, PETS, OUTFITS, pet, get fightKind() { return fightKind; }, playerDodge, renderGoals, checkGoals, levelOf, get potions() { return potions; }, GOALS, sfx, renderShop, carryMult, sailTo, get SAVE() { return SAVE; }, renderIsles, cam, startBattle, returnToIsland, playerAttack, resetFight, enterCave, travel, get W() { return W; }, get WE() { return WE; }, get B() { return B; }, P, keys, doAction, get mode() { return mode; }, get action() { return action; }, get playing() { return playing; }, get scene() { return scene; }, render2D, updateTiles };
+window.__bg = { get EP() { return EP; }, FOES, setFight(k) { fightKind = k; }, get dragons() { return WE && WE.dragons; }, forceDive() { if (WE && WE.dragons) WE.diveIn = 0; }, playerSuper, renderFight, renderStyle, claimDaily, PETS, OUTFITS, pet, get fightKind() { return fightKind; }, playerDodge, renderGoals, checkGoals, levelOf, get potions() { return potions; }, GOALS, sfx, renderShop, carryMult, sailTo, get SAVE() { return SAVE; }, renderIsles, cam, startBattle, returnToIsland, playerAttack, resetFight, enterCave, travel, get W() { return W; }, get WE() { return WE; }, get B() { return B; }, P, keys, doAction, get mode() { return mode; }, get action() { return action; }, get playing() { return playing; }, get scene() { return scene; }, render2D, updateTiles, RIVALS, FOE_BY_ID, PET_ORDER, ENEMY_PETS, petPicture, foePicture };
 })();
 </script>
 </body>
